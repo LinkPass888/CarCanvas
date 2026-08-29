@@ -1,0 +1,80 @@
+name: Build unsigned IPA
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify repository (fast, Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run repository checks
+        run: python3 scripts/verify-repository.py
+
+  build-ipa:
+    name: Build unsigned IPA (macOS 26 / Xcode 26)
+    needs: verify
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Print toolchain
+        run: |
+          xcode-select -p
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Install xcodegen
+        run: brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate --spec project.yml
+
+      - name: Re-verify generated tree
+        run: python3 scripts/verify-repository.py
+
+      - name: Build and package unsigned IPA
+        run: bash scripts/build-unsigned-ipa.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CarCanvas-unsigned-ipa
+          path: |
+            artifacts/CarCanvas-unsigned.ipa
+            artifacts/build-report.txt
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Attach IPA to release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build-ipa
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: CarCanvas-unsigned-ipa
+          path: artifacts
+      - name: Create release and upload IPA
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            artifacts/CarCanvas-unsigned.ipa \
+            artifacts/build-report.txt \
+            --title "CarCanvas ${GITHUB_REF_NAME}" \
+            --notes "Unsigned IPA built by GitHub Actions. Sign it with your own App Group-capable profile before installing. See README.md."

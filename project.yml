@@ -1,0 +1,70 @@
+# xcodegen spec. The .xcodeproj is generated and intentionally NOT committed.
+name: CarCanvas
+options:
+  bundleIdPrefix: com.carcanvas
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+    TARGETED_DEVICE_FAMILY: "1,2"
+    CLANG_ENABLE_MODULES: YES
+    ENABLE_STRICT_OBJC_MSGSEND: YES
+    SWIFT_EMIT_LOC_STRINGS: YES
+    SUPPORTED_PLATFORMS: iphoneos iphonesimulator
+    SUPPORTS_MACCATALYST: NO
+  configs:
+    Debug:
+      SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+      DEBUG_INFORMATION_FORMAT: dwarf
+    Release:
+      SWIFT_OPTIMIZATION_LEVEL: "-O"
+      DEBUG_INFORMATION_FORMAT: "dwarf-with-dsym"
+
+targets:
+  CarCanvas:
+    type: application
+    platform: iOS
+    sources:
+      # .lproj resources are deliberately excluded here. The build script
+      # injects them into the .app after compilation, which keeps xcodegen
+      # from synthesising variant groups.
+      - path: CarCanvas
+        excludes:
+          - "Resources/**"
+          - "Info.plist"
+          - "CarCanvas.entitlements"
+          - "CarCanvas-Bridging-Header.h"
+      - path: vendor/worse_query
+        excludes:
+          - "NOTICE.md"
+    settings:
+      base:
+        PRODUCT_NAME: CarCanvas
+        PRODUCT_BUNDLE_IDENTIFIER: com.carcanvas.wq
+        INFOPLIST_FILE: CarCanvas/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: CarCanvas/CarCanvas.entitlements
+        SWIFT_OBJC_BRIDGING_HEADER: CarCanvas/CarCanvas-Bridging-Header.h
+        HEADER_SEARCH_PATHS: "$(SRCROOT)/vendor/worse_query"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CURRENT_PROJECT_VERSION: "1"
+        MARKETING_VERSION: "2.0.0"
+
+schemes:
+  CarCanvas:
+    build:
+      targets:
+        CarCanvas: all
+    run:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
