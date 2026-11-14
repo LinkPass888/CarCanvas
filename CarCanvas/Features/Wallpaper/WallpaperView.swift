@@ -69,7 +69,7 @@ struct WallpaperView: View {
         if createLight { appearances.insert(.light) }
 
         Task.detached(priority: .userInitiated) {
-            var resultMessage: String
+            let resultMessage: String
             do {
                 let data = try await item.loadTransferable(type: Data.self)
                 guard let data else { throw CCError.renderFailed }

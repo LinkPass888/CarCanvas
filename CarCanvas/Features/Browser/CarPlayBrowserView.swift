@@ -43,13 +43,11 @@ struct CarPlayBrowserView: View {
 
     private func load() {
         isLoading = true
-        Task.detached(priority: .userInitiated) {
-            let outcome: (files: [WallpaperTarget], message: String?) = await loadAsync()
-            await MainActor.run {
-                targets = outcome.files
-                error = outcome.message
-                isLoading = false
-            }
+        Task { @MainActor in
+            let outcome = await loadAsync()
+            targets = outcome.0
+            error = outcome.1
+            isLoading = false
         }
     }
 
