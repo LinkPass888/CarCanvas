@@ -43,11 +43,17 @@ final class WallpaperService {
             throw CCError.renderFailed
         }
 
+        // Encode ONCE. The system writer is not reliably repeatable in the same
+        // process (the second call can fail), and both appearances share the
+        // same pixels anyway - only the file name differs.
+        let data = try encode(cgImage, appearance: appearances.contains(.dark) ? .dark : .light)
+        let baseName = sanitized(settings.exportBaseName)
+        guard !baseName.isEmpty else { throw CCError.renderFailed }
+
         var last: HistoryEntry?
         for appearance in appearances where appearance != .unknown {
-            let data = try encode(cgImage, appearance: appearance)
             last = try history.save(data: data,
-                                    baseName: sanitized(settings.exportBaseName),
+                                    baseName: baseName,
                                     appearance: appearance,
                                     source: .local,
                                     sourceImageName: imageURL.lastPathComponent)

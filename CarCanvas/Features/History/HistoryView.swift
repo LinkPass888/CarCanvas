@@ -4,6 +4,8 @@ struct HistoryView: View {
     @EnvironmentObject private var history: HistoryStore
     @State private var exportEntry: HistoryEntry?
     @State private var banner: String?
+    @State private var showRespringConfirm = false
+    @State private var isRespringing = false
 
     var body: some View {
         List {
@@ -20,14 +22,16 @@ struct HistoryView: View {
                             if entry.darkFileName != nil { Label(L("WALLPAPER_SET_DARK"), systemImage: "moon") }
                             if entry.lightFileName != nil { Label(L("WALLPAPER_SET_LIGHT"), systemImage: "sun.max") }
                         }.font(.caption)
-                        HStack {
-                            Button(L("HISTORY_EXPORT_CARPLAY")) { exportEntry = entry }
-                                .buttonStyle(.borderedProminent)
-                            if let name = entry.darkFileName ?? entry.lightFileName {
-                                ShareLink(item: history.url(for: name)) {
-                                    Label(L("HISTORY_SHARE"), systemImage: "square.and.arrow.up")
-                                }
+                        // Apply and Share are separate rows: applying writes to
+                        // the device, sharing only hands the file out.
+                        Button(L("HISTORY_APPLY")) { exportEntry = entry }
+                            .buttonStyle(.borderedProminent)
+
+                        if let name = entry.darkFileName ?? entry.lightFileName {
+                            ShareLink(item: history.url(for: name)) {
+                                Label(L("HISTORY_SHARE"), systemImage: "square.and.arrow.up")
                             }
+                            .font(.footnote)
                         }
                     }
                     .swipeActions {
@@ -38,12 +42,18 @@ struct HistoryView: View {
                 }
             }
         }
-        .navigationTitle(L("HISTORY_TITLE"))
+        .navigationTitle(L("ROOT_WALLPAPERS"))
         .toolbar {
-            if !history.entries.isEmpty {
-                Button(L("HISTORY_CLEAR_ALL")) { history.clearAll() }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(L("SETTINGS_LOGOUT")) { showRespringConfirm = true }
             }
         }
+        .confirmationDialog(L("SETTINGS_LOGOUT_CONFIRM_TITLE"), isPresented: $showRespringConfirm) {
+            Button(L("SETTINGS_LOGOUT"), role: .destructive) { isRespringing = true }
+        } message: {
+            Text(L("SETTINGS_LOGOUT_CONFIRM_MESSAGE"))
+        }
+        .fullScreenCover(isPresented: $isRespringing) { NeoSpringOverlay() }
         .sheet(item: $exportEntry) { entry in
             ExportDestinationSheet(entry: entry) { summary in banner = summary }
         }

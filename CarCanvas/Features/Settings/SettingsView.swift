@@ -12,7 +12,6 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section { StatusBanner() }
 
             Section(L("SETTINGS_SECTION_GUIDE")) {
                 Button(L("SETTINGS_GUIDE")) { showGuide = true }

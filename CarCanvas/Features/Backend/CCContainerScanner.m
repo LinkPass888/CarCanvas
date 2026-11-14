@@ -88,8 +88,17 @@ NSInteger CCScanApplicationContainers(NSTimeInterval budget, BOOL (^visitor)(NSS
     if (!valid || info.st_ino > UINT64_MAX - 100000) return -1;
 
     const uint64_t upper = (uint64_t)info.st_ino + 100000;
-    const char *root = "/var/mobile/Containers/Data/Application/";
-    const size_t rootLength = strlen(root);
+
+    // iOS 27 moved system/daemon containers under /var/containers, so both
+    // roots have to be walked. This list mirrors what worse_query reports as
+    // reachable.
+    static const char *roots[] = {
+        "/var/mobile/Containers/Data/Application/",
+        "/var/mobile/Containers/Data/InternalDaemon/",
+        "/var/mobile/Containers/Data/PluginKitPlugin/",
+        "/var/containers/Data/System/"
+    };
+    const size_t rootCount = sizeof(roots) / sizeof(roots[0]);
 
     struct timespec start, now;
     clock_gettime(CLOCK_MONOTONIC, &start);
@@ -105,11 +114,18 @@ NSInteger CCScanApplicationContainers(NSTimeInterval budget, BOOL (^visitor)(NSS
 
         const char *candidate = buffer;
         if (strncmp(candidate, "/private/var/", 13) == 0) candidate += 8;
-        if (strncmp(candidate, root, rootLength) != 0) continue;
 
-        // Container directories are named by a 36-character UUID.
-        const char *tail = candidate + rootLength;
-        if (strlen(tail) != 36 || strchr(tail, '/')) continue;
+        BOOL matched = NO;
+        for (size_t i = 0; i < rootCount; i++) {
+            size_t rootLength = strlen(roots[i]);
+            if (strncmp(candidate, roots[i], rootLength) != 0) continue;
+            const char *tail = candidate + rootLength;
+            // Direct children only; names are UUIDs or identifiers.
+            if (strlen(tail) == 0 || strchr(tail, '/')) break;
+            matched = YES;
+            break;
+        }
+        if (!matched) continue;
 
         inspected++;
         @autoreleasepool {

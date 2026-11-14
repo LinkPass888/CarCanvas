@@ -55,7 +55,11 @@ final class WQAccess {
         let is26 = WQCompatibility.current.majorVersion == 26
         // create_dir is false: the file must already exist.
         CCLog.info("prefs query: group=\(group) altFlags=\(is26)")
-        let handle = worse_query(path, group, is26, false)
+        // create_dir MUST be true here. With false, worse_query lstat()s the
+        // target from inside the sandbox, cannot see it, and returns -255
+        // ("nothing exists at this path") - which is exactly the failure the
+        // session log showed. Placard passes true for the same reason.
+        let handle = worse_query(path, group, is26, true)
         CCLog.info("prefs query handle=\(handle)")
         guard handle >= 0 else { throw CCError.accessFailed(handle) }
         defer { worse_query_release(handle) }
@@ -97,7 +101,9 @@ final class WQAccess {
         // rejects it. This is the only place alt_flags is decided.
         let is26 = WQCompatibility.current.majorVersion == 26
         CCLog.info("container query: group=\(group) altFlags=\(is26) path=\(containerPath)")
-        let handle = worse_query(containerPath, group, is26, false)
+        // create_dir=true: the sandbox cannot stat this path, so the existence
+        // precheck would reject a container that does exist.
+        let handle = worse_query(containerPath, group, is26, true)
         CCLog.info("container query handle=\(handle)")
         guard handle >= 0 else { throw CCError.accessFailed(handle) }
         return handle

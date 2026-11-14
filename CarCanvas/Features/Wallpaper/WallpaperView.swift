@@ -15,12 +15,12 @@ struct WallpaperView: View {
     @State private var createDark = true
     @State private var createLight = true
     @State private var message: String?
+    @State private var messageIsError = false
     @State private var isWorking = false
     @State private var hasLoadedOnce = false
 
     var body: some View {
         Form {
-            Section { StatusBanner() }
 
             Section {
                 if preview.isSearching {
@@ -42,34 +42,35 @@ struct WallpaperView: View {
                 Text(previewFooter)
             }
 
-            Section(L("WALLPAPER_SECTION_ACTIONS")) {
-                PhotosPicker(selection: $pickerItem, matching: .images) {
-                    Label(L("WALLPAPER_CHOOSE"), systemImage: "photo.on.rectangle")
-                }
-                Toggle(L("WALLPAPER_SET_DARK"), isOn: $createDark)
-                Toggle(L("WALLPAPER_SET_LIGHT"), isOn: $createLight)
-                Button {
-                    createLocal()
-                } label: {
-                    Label(L("WALLPAPER_CREATE_LOCAL"), systemImage: "square.and.arrow.down")
-                }
-                .disabled(pickerItem == nil || isWorking || (!createDark && !createLight))
-            }
-
+            // Export name comes BEFORE the create button, so it is set first.
             Section(L("WALLPAPER_EXPORT_FILENAME")) {
                 TextField(L("WALLPAPER_EXPORT_FILENAME_TITLE"), text: $settings.exportBaseName)
                 Text(L("WALLPAPER_EXPORT_FILENAME_FOOTER"))
                     .font(.caption).foregroundStyle(.secondary)
             }
 
-            Section {
-                Text(L("WALLPAPER_CREATE_LOCAL_FOOTER"))
+            Section(L("WALLPAPER_SECTION_ACTIONS")) {
+                PhotosPicker(selection: $pickerItem, matching: .images) {
+                    Label(L("WALLPAPER_CHOOSE"), systemImage: "photo.on.rectangle")
+                }
+                Toggle(L("WALLPAPER_SET_DARK"), isOn: $createDark)
+                Toggle(L("WALLPAPER_SET_LIGHT"), isOn: $createLight)
+
+                Button {
+                    createLocal()
+                } label: {
+                    Label(L("WALLPAPER_NEW_CPBITMAP"), systemImage: "plus.circle")
+                }
+                .disabled(pickerItem == nil || isWorking || (!createDark && !createLight))
+
+                Text(L("WALLPAPER_NEW_CPBITMAP_FOOTER"))
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
         .navigationTitle(L("WALLPAPER_TITLE"))
-        .alert(L("COMMON_ERROR"), isPresented: Binding(
-            get: { message != nil }, set: { if !$0 { message = nil } })) {
+        .alert(messageIsError ? L("COMMON_ERROR") : L("WALLPAPER_CREATE_DONE_TITLE"),
+               isPresented: Binding(
+                get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button(L("COMMON_OK")) { message = nil }
         } message: { Text(message ?? "") }
         .overlay { if isWorking { ProgressView(L("COMMON_PLEASE_WAIT")) } }
@@ -147,8 +148,10 @@ struct WallpaperView: View {
                     try WallpaperService().createLocal(imageURL: tmp, appearances: appearances)
                 }.value
                 resultMessage = L("WALLPAPER_EXPORT_SUCCESS") + "\n" + entry.baseName
+                messageIsError = false
             } catch {
                 resultMessage = error.localizedDescription
+                messageIsError = true
             }
             await MainActor.run {
                 message = resultMessage

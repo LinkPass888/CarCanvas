@@ -171,3 +171,13 @@
 "SETTINGS_LOG_REFRESH" = "Refresh";
 "SETTINGS_LOG_EMPTY" = "No log entries yet.";
 "SETTINGS_LOG_FOOTER" = "Recorded from app launch until it exits; cleared automatically at exit. Export is opt-in.";
+"ROOT_WALLPAPERS" = "Wallpapers";
+"ROOT_NEW_WALLPAPER" = "New";
+"ROOT_CARPLAY" = "CarPlay";
+"WALLPAPER_NEW_CPBITMAP" = "New Wallpaper CPBitmap";
+"WALLPAPER_NEW_CPBITMAP_FOOTER" = "Creates the CPBitmap file only. Nothing is applied to CarPlay.";
+"WALLPAPER_CREATE_DONE_TITLE" = "Created";
+"HISTORY_APPLY" = "Apply";
+"SETTINGS_LOG_COPY" = "Copy";
+"SETTINGS_LOG_COPIED" = "Copied";
+"COMMON_CLOSE" = "Close";

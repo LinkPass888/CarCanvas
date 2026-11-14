@@ -17,8 +17,7 @@ struct ExportDestinationSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section { StatusBanner() }
-                Section(L("HISTORY_EXPORT_CARPLAY_PICK_TITLE")) {
+                    Section(L("HISTORY_EXPORT_CARPLAY_PICK_TITLE")) {
                     Text(L("HISTORY_EXPORT_CARPLAY_PICK_MESSAGE"))
                         .font(.caption).foregroundStyle(.secondary)
                     Toggle(L("WALLPAPER_SET_DARK"), isOn: $dark)

@@ -171,3 +171,13 @@
 "SETTINGS_LOG_REFRESH" = "更新";
 "SETTINGS_LOG_EMPTY" = "ログはまだありません。";
 "SETTINGS_LOG_FOOTER" = "App 起動から終了まで記録し、終了時に自動でクリアします。書き出しは手動です。";
+"ROOT_WALLPAPERS" = "壁紙";
+"ROOT_NEW_WALLPAPER" = "新規";
+"ROOT_CARPLAY" = "CarPlay";
+"WALLPAPER_NEW_CPBITMAP" = "新規壁紙 CPBitmap";
+"WALLPAPER_NEW_CPBITMAP_FOOTER" = "CPBitmap ファイルを作成するだけで、CarPlay には適用しません。";
+"WALLPAPER_CREATE_DONE_TITLE" = "作成しました";
+"HISTORY_APPLY" = "適用";
+"SETTINGS_LOG_COPY" = "コピー";
+"SETTINGS_LOG_COPIED" = "コピーしました";
+"COMMON_CLOSE" = "閉じる";

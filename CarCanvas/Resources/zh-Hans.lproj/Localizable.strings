@@ -171,3 +171,13 @@
 "SETTINGS_LOG_REFRESH" = "刷新";
 "SETTINGS_LOG_EMPTY" = "暂无日志记录。";
 "SETTINGS_LOG_FOOTER" = "从 App 启动记录到退出，退出时自动清空。导出需手动点击。";
+"ROOT_WALLPAPERS" = "壁纸";
+"ROOT_NEW_WALLPAPER" = "新建";
+"ROOT_CARPLAY" = "CarPlay";
+"WALLPAPER_NEW_CPBITMAP" = "新建壁纸 CPBitmap";
+"WALLPAPER_NEW_CPBITMAP_FOOTER" = "仅新建 CPBitmap 文件，不会应用到 CarPlay。";
+"WALLPAPER_CREATE_DONE_TITLE" = "已创建";
+"HISTORY_APPLY" = "应用";
+"SETTINGS_LOG_COPY" = "复制";
+"SETTINGS_LOG_COPIED" = "已复制";
+"COMMON_CLOSE" = "关闭";

@@ -11,7 +11,6 @@ struct CarPlayBrowserView: View {
 
     var body: some View {
         List {
-            Section { StatusBanner() }
             Section(L("BROWSER_TITLE")) {
                 if isLoading { ProgressView(L("BROWSER_LOADING")) }
                 else if targets.isEmpty {

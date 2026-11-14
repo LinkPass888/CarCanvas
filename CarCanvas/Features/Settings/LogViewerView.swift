@@ -1,12 +1,11 @@
 import SwiftUI
-import UniformTypeIdentifiers
 
-/// Read-only session log with an opt-in text export.
+/// Read-only session log. Copy is a plain pasteboard write, which works where
+/// the share sheet was unreliable (the export button did nothing on device).
 struct LogViewerView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
-    @State private var showExporter = false
-    @State private var exportURL: URL?
+    @State private var didCopy = false
 
     var body: some View {
         NavigationStack {
@@ -24,46 +23,23 @@ struct LogViewerView: View {
                     Button(L("SETTINGS_LOG_REFRESH")) { text = CCLog.snapshot() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    HStack {
+                    HStack(spacing: 12) {
                         Button(L("SETTINGS_LOG_CLEAR")) {
                             CCLog.clear()
                             text = ""
                         }
-                        Button(L("SETTINGS_LOG_EXPORT")) { prepareExport() }
-                        Button(L("GUIDE_DONE")) { dismiss() }
+                        Button(didCopy ? L("SETTINGS_LOG_COPIED") : L("SETTINGS_LOG_COPY")) {
+                            UIPasteboard.general.string = CCLog.snapshot()
+                            didCopy = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                didCopy = false
+                            }
+                        }
+                        Button(L("COMMON_CLOSE")) { dismiss() }
                     }
                 }
             }
             .onAppear { text = CCLog.snapshot() }
-            .sheet(isPresented: $showExporter) {
-                if let exportURL {
-                    ActivityExportView(url: exportURL)
-                }
-            }
         }
     }
-
-    private func prepareExport() {
-        let snapshot = CCLog.snapshot()
-        let name = "CarCanvas-\(Int(Date().timeIntervalSince1970)).log"
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
-        do {
-            try snapshot.write(to: url, atomically: true, encoding: .utf8)
-            exportURL = url
-            showExporter = true
-        } catch {
-            CCLog.error("log export failed: \(error.localizedDescription)")
-        }
-    }
-}
-
-/// Wraps UIActivityViewController so the user can share/save the log file.
-struct ActivityExportView: UIViewControllerRepresentable {
-    let url: URL
-
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: [url], applicationActivities: nil)
-    }
-
-    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
