@@ -49,11 +49,14 @@ final class WQAccess {
         }
         let is26 = WQCompatibility.current.majorVersion == 26
         // create_dir is false: the file must already exist.
+        CCLog.info("prefs query: group=\(group) altFlags=\(is26)")
         let handle = worse_query(path, group, is26, false)
+        CCLog.info("prefs query handle=\(handle)")
         guard handle >= 0 else { throw CCError.accessFailed(handle) }
         defer { worse_query_release(handle) }
 
         guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)) else {
+            CCLog.error("prefs file unreadable after token")
             throw CCError.templateUnreadable("com.apple.carplay.plist")
         }
         return try body(data)
@@ -77,7 +80,9 @@ final class WQAccess {
         // iOS 26.x App Group containers need the alternate flag set; iOS 27
         // rejects it. This is the only place alt_flags is decided.
         let is26 = WQCompatibility.current.majorVersion == 26
+        CCLog.info("container query: group=\(group) altFlags=\(is26) path=\(containerPath)")
         let handle = worse_query(containerPath, group, is26, false)
+        CCLog.info("container query handle=\(handle)")
         guard handle >= 0 else { throw CCError.accessFailed(handle) }
         return handle
     }

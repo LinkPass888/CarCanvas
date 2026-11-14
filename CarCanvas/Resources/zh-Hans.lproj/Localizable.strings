@@ -164,3 +164,10 @@
 "WALLPAPER_PREVIEW_LIGHT" = "浅色预览";
 "WALLPAPER_PAIRED_NO_CACHE" = "已连接 CarPlay，但还没有壁纸缓存。请在 CarPlay 设置 → 壁纸中，将上两排的 6 张带图案壁纸各选一次，然后返回。现在仍可以先创建本地 CPBitmap 文件。";
 "WALLPAPER_CACHE_PROBE_FAILED" = "无法检查 CarPlay 状态（App Group 或系统访问不可用）。仍可以先创建本地 CPBitmap 文件。";
+"SETTINGS_LOG_TITLE" = "会话日志";
+"SETTINGS_LOG_VIEW" = "查看会话日志";
+"SETTINGS_LOG_EXPORT" = "导出";
+"SETTINGS_LOG_CLEAR" = "清空";
+"SETTINGS_LOG_REFRESH" = "刷新";
+"SETTINGS_LOG_EMPTY" = "暂无日志记录。";
+"SETTINGS_LOG_FOOTER" = "从 App 启动记录到退出，退出时自动清空。导出需手动点击。";

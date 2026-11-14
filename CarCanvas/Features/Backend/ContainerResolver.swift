@@ -38,7 +38,9 @@ final class ContainerResolver {
         try WQAccess.shared.preflight()
 
         var container: String?
+        var candidates = 0
         _ = CCScanApplicationContainers(scanBudget) { path in
+            candidates += 1
             guard let identifier = CCContainerIdentifier(path) else { return false }
             if identifier == WQWhitelist.carPlayWallpaperBundleID,
                WQWhitelist.isAllowedContainer(path, identifier: identifier) {
@@ -47,6 +49,7 @@ final class ContainerResolver {
             }
             return false
         }
+        CCLog.info("container scan inspected \(candidates) candidates")
         guard let containerPath = container else {
             CCLog.error("container scan: CarPlayWallpaper container not found")
             throw CCError.cacheNotFound

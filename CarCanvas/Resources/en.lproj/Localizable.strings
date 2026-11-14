@@ -164,3 +164,10 @@
 "WALLPAPER_PREVIEW_LIGHT" = "Light preview";
 "WALLPAPER_PAIRED_NO_CACHE" = "CarPlay is connected, but no wallpaper cache exists yet. In CarPlay Settings > Wallpaper, select each of the six patterned wallpapers once, then come back. You can still create local CPBitmap files now.";
 "WALLPAPER_CACHE_PROBE_FAILED" = "Could not check the CarPlay state (App Group or system access unavailable). You can still create local CPBitmap files.";
+"SETTINGS_LOG_TITLE" = "Session log";
+"SETTINGS_LOG_VIEW" = "View session log";
+"SETTINGS_LOG_EXPORT" = "Export";
+"SETTINGS_LOG_CLEAR" = "Clear";
+"SETTINGS_LOG_REFRESH" = "Refresh";
+"SETTINGS_LOG_EMPTY" = "No log entries yet.";
+"SETTINGS_LOG_FOOTER" = "Recorded from app launch until it exits; cleared automatically at exit. Export is opt-in.";

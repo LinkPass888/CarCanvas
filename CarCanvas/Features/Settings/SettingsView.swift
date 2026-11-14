@@ -6,6 +6,7 @@ struct SettingsView: View {
     @State private var showClear = false
     @State private var showRespringConfirm = false
     @State private var isRespringing = false
+    @State private var showLogViewer = false
 
     private var entitledGroups: [String] { WQAccess.shared.entitledGroups }
 
@@ -62,6 +63,10 @@ struct SettingsView: View {
 
             Section {
                 Button(L("WALLPAPER_CLEAR_SAVED_DATA"), role: .destructive) { showClear = true }
+
+                Button(L("SETTINGS_LOG_VIEW")) { showLogViewer = true }
+                Text(L("SETTINGS_LOG_FOOTER"))
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .navigationTitle(L("SETTINGS_TITLE"))
@@ -74,6 +79,9 @@ struct SettingsView: View {
         } message: { Text(L("WALLPAPER_CLEAR_CONFIRM_MESSAGE")) }
         .fullScreenCover(isPresented: $isRespringing) {
             NeoSpringOverlay()
+        }
+        .sheet(isPresented: $showLogViewer) {
+            LogViewerView()
         }
     }
 }

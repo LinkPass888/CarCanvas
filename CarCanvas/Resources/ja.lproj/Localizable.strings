@@ -164,3 +164,10 @@
 "WALLPAPER_PREVIEW_LIGHT" = "ライトプレビュー";
 "WALLPAPER_PAIRED_NO_CACHE" = "CarPlay は接続されていますが、壁紙キャッシュはまだありません。CarPlay 設定 → 壁紙 で上と中段の 6 つの图柄壁紙をそれぞれ 1 回選んでから戻ってください。今すぐにローカル CPBitmap は作成できます。";
 "WALLPAPER_CACHE_PROBE_FAILED" = "CarPlay の状態を確認できませんでした（App Group またはシステムアクセス不可用）。今すぐにローカル CPBitmap は作成できます。";
+"SETTINGS_LOG_TITLE" = "セッションログ";
+"SETTINGS_LOG_VIEW" = "セッションログを表示";
+"SETTINGS_LOG_EXPORT" = "書き出し";
+"SETTINGS_LOG_CLEAR" = "クリア";
+"SETTINGS_LOG_REFRESH" = "更新";
+"SETTINGS_LOG_EMPTY" = "ログはまだありません。";
+"SETTINGS_LOG_FOOTER" = "App 起動から終了まで記録し、終了時に自動でクリアします。書き出しは手動です。";
