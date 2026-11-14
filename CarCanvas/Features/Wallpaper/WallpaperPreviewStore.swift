@@ -14,6 +14,9 @@ final class WallpaperPreviewStore: ObservableObject {
         var light: CGImage?
         var wallpaperName: String?
         var cacheDirectory: String?
+        var hasCacheFiles = false
+        var pairings = 0
+        var pairingProbeFailed = false
     }
 
     @Published private(set) var darkImage: CGImage?
@@ -21,6 +24,9 @@ final class WallpaperPreviewStore: ObservableObject {
     @Published private(set) var isSearching = false
     @Published private(set) var wallpaperName: String?
     @Published private(set) var cacheDirectory: String?
+    @Published private(set) var hasCacheFiles = false
+    @Published private(set) var pairings = 0
+    @Published private(set) var pairingProbeFailed = false
 
     private let settings = SettingsStore.shared
 
@@ -34,6 +40,9 @@ final class WallpaperPreviewStore: ObservableObject {
         lightImage = loaded.light
         wallpaperName = loaded.wallpaperName
         cacheDirectory = loaded.cacheDirectory
+        hasCacheFiles = loaded.hasCacheFiles
+        pairings = loaded.pairings
+        pairingProbeFailed = loaded.pairingProbeFailed
         isSearching = false
     }
 
@@ -46,24 +55,38 @@ final class WallpaperPreviewStore: ObservableObject {
 
     /// Reads whatever the device already has. Safe to call off the main actor:
     /// it only returns values and touches no published property.
+    ///
+    /// Device pairing and the wallpaper cache are probed separately. Connecting
+    /// CarPlay does NOT create the cache files — those appear only after the
+    /// six patterned wallpapers have been picked in CarPlay Settings.
     nonisolated static func loadFromDevice() -> Loaded {
+        var result = Loaded()
+
+        // Do the container work first, then probe pairings. Both use
+        // worse_query's Caches swap; running them back-to-back in the other
+        // order can leave the second one reading a half-restored symlink.
         do {
             let resolved = try ContainerResolver().resolve()
             let dark = resolved.files.first { $0.isDark }
             let light = resolved.files.first { $0.isLight }
             let service = WallpaperService()
 
-            let name = (dark ?? light)?.fileName
+            result.cacheDirectory = resolved.cacheDirectory
+            result.hasCacheFiles = !resolved.files.isEmpty
+            result.wallpaperName = (dark ?? light)?.fileName
                 .replacingOccurrences(of: "-Dark-", with: "-")
                 .replacingOccurrences(of: "-Light-", with: "-")
-
-            return Loaded(dark: dark.flatMap { service.previewImage(for: $0, resolved: resolved) },
-                          light: light.flatMap { service.previewImage(for: $0, resolved: resolved) },
-                          wallpaperName: name,
-                          cacheDirectory: resolved.cacheDirectory)
+            result.dark = dark.flatMap { service.previewImage(for: $0, resolved: resolved) }
+            result.light = light.flatMap { service.previewImage(for: $0, resolved: resolved) }
         } catch {
             CCLog.info("preview load: \(error.localizedDescription)")
-            return Loaded(dark: nil, light: nil, wallpaperName: nil, cacheDirectory: nil)
         }
+
+        switch CarPlayDeviceProbe.probe() {
+        case .paired(let count): result.pairings = count
+        case .notPaired: result.pairings = 0
+        case .unknown: result.pairingProbeFailed = true
+        }
+        return result
     }
 }

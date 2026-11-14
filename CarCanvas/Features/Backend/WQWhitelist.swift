@@ -17,9 +17,19 @@ enum WQWhitelist {
     /// Relative suffix of the wallpaper image cache inside that container.
     static let cacheRelativePath = "Library/Caches/MappedImageCache/com.apple.CarPlayApp.wallpaper-images"
 
-    /// Cache files may only match this shape. The numeric suffix (-14 etc.)
-    /// varies between devices, so we accept digits but nothing else.
-    private static let cacheFilePattern = #"^CARWallpaper[A-Za-z]+-(Dark|Light)-\d+\.cpbitmap$"#
+    /// Exactly one preference file, read-only, for the CarPlay pairing list.
+    /// No directory is granted: only this file.
+    static let carPlayPreferencesPath = "/var/mobile/Library/Preferences/com.apple.carplay.plist"
+
+    /// The one preference file, accepted under either path spelling.
+    static func isAllowedCarPlayPreferences(_ path: String) -> Bool {
+        path == carPlayPreferencesPath || path == "/private" + carPlayPreferencesPath
+    }
+
+    /// The original app used `CARWallpaper<Color>-Dark.cpbitmap` /
+    /// `-Light.cpbitmap`; READMEs also document a device-dependent `-14`
+    /// variant before the extension. Accept both, and nothing else.
+    private static let cacheFilePattern = #"^CARWallpaper[A-Za-z]+-(Dark|Light)(-\d+)?\.cpbitmap$"#
 
     /// A container directory is acceptable only if it resolves to the
     /// CarPlayWallpaper data container. `identifier` comes from the

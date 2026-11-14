@@ -47,7 +47,11 @@ final class ContainerResolver {
             }
             return false
         }
-        guard let containerPath = container else { throw CCError.cacheNotFound }
+        guard let containerPath = container else {
+            CCLog.error("container scan: CarPlayWallpaper container not found")
+            throw CCError.cacheNotFound
+        }
+        CCLog.info("container scan: found \(containerPath)")
 
         let cacheDirectory = containerPath + "/" + WQWhitelist.cacheRelativePath
         guard WQWhitelist.isAllowedCacheDirectory(cacheDirectory) else {
@@ -56,8 +60,10 @@ final class ContainerResolver {
 
         let files = try WQAccess.shared.withAccess(containerPath: containerPath) {
             guard let names = try? FileManager.default.contentsOfDirectory(atPath: cacheDirectory) else {
+                CCLog.error("cache directory unreadable: \(cacheDirectory)")
                 throw CCError.cacheNotFound
             }
+            CCLog.info("cache directory: \(names.count) entries")
             var targets: [WallpaperTarget] = []
             for name in names.sorted() {
                 let path = cacheDirectory + "/" + name
@@ -71,6 +77,7 @@ final class ContainerResolver {
             }
             return targets
         }
+        CCLog.info("cache files accepted: \(files.count)")
         guard !files.isEmpty else { throw CCError.noCacheFiles }
         return Resolved(containerPath: containerPath, cacheDirectory: cacheDirectory, files: files)
     }

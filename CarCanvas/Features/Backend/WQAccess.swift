@@ -34,34 +34,44 @@ final class WQAccess {
                                               ? "no com.apple.security.application-groups entitlement"
                                               : entitledGroups.joined(separator: ", "))
         }
-        // An interrupted previous run can leave Library/Caches as a symlink,
-        // which makes every subsequent query fail. Restore it first.
-        if let group = appGroupIdentifier {
-            var error: NSError?
-            if !CCAppGroupResetCachesDirectory(group, &error) {
-                CCLog.error("App Group cache reset failed: \(error?.localizedDescription ?? "unknown")")
-            }
-        }
     }
 
-    /// Validates a container candidate then consumes a sandbox extension for it.
+    /// Scoped read of the single allowed CarPlay preference file. No directory
+    /// is ever granted, so this cannot be widened into a general file read.
+    func withCarPlayPreferences<T>(_ body: (Data) throws -> T) throws -> T {
+        try preflight()
+        guard let group = appGroupIdentifier else {
+            throw CCError.appGroupUnavailable("no com.apple.security.application-groups entitlement")
+        }
+        let path = WQWhitelist.carPlayPreferencesPath
+        guard WQWhitelist.isAllowedCarPlayPreferences(path) else {
+            throw CCError.outsideWhitelist(path)
+        }
+        let is26 = WQCompatibility.current.majorVersion == 26
+        // create_dir is false: the file must already exist.
+        let handle = worse_query(path, group, is26, false)
+        guard handle >= 0 else { throw CCError.accessFailed(handle) }
+        defer { worse_query_release(handle) }
+
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)) else {
+            throw CCError.templateUnreadable("com.apple.carplay.plist")
+        }
+        return try body(data)
+    }
+
+    /// Consumes a sandbox extension for a container that the scanner has
+    /// already identified as `com.apple.CarPlayWallpaper`.
+    ///
+    /// The identifier check is NOT repeated here: the metadata plist lives
+    /// outside our sandbox and is only reachable through the scanner's bounded
+    /// enumeration, so re-reading it at this point would always fail and reject
+    /// a perfectly valid container. The path whitelist is still enforced.
     private func consume(containerPath: String) throws -> Int64 {
         guard let group = appGroupIdentifier else {
             throw CCError.appGroupUnavailable("no com.apple.security.application-groups entitlement")
         }
-        // Read the container's own metadata plist and compare, so a caller
-        // cannot bypass validation by passing an expected constant for an
-        // unrelated container.
-        let metadata = (containerPath as NSString)
-            .appendingPathComponent(".com.apple.mobile_container_manager.metadata.plist")
-        guard let data = try? Data(contentsOf: URL(fileURLWithPath: metadata)),
-              let plist = try? PropertyListSerialization.propertyList(from: data, format: nil),
-              let dict = plist as? [String: Any],
-              let actual = dict["MCMMetadataIdentifier"] as? String,
-              actual == WQWhitelist.carPlayWallpaperBundleID else {
-            throw CCError.outsideWhitelist(containerPath)
-        }
-        guard WQWhitelist.isAllowedContainer(containerPath, identifier: actual) else {
+        guard WQWhitelist.isAllowedContainer(containerPath,
+                                             identifier: WQWhitelist.carPlayWallpaperBundleID) else {
             throw CCError.outsideWhitelist(containerPath)
         }
         // iOS 26.x App Group containers need the alternate flag set; iOS 27

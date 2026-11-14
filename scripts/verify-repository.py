@@ -390,6 +390,16 @@ if check(wl.is_file() and wa.is_file(), "backend whitelist + access wrapper exis
           "version gate called before access", "version gate not called")
     check("isAllowedContainer" in wa_text and "isAllowedCacheFile" in wl_text,
           "path validation present in both layers", "path validation missing")
+    # Regression guard: the old consume() re-read the container metadata plist
+    # from inside the sandbox, which always failed and rejected every valid
+    # container. The scanner does that identification instead.
+    check("MCMMetadataIdentifier" not in wa_text and
+          "PropertyListSerialization.propertyList(from: data" not in wa_text,
+          "consume() does not re-read container metadata inside the sandbox",
+          "consume() repeats the out-of-sandbox metadata check")
+    check("CCAppGroupResetCachesDirectory" not in wa_text,
+          "no external Caches reset (worse_query cleans up itself)",
+          "external Caches reset can tear down worse_query's own swap")
 
 swift_files = [p for p in iter_repo_files() if p.suffix == ".swift"]
 ui_files = [p for p in swift_files if "/Features/" in rel(p) or "/UI/" in rel(p)]

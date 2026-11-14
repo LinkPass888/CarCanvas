@@ -24,14 +24,15 @@ struct WallpaperView: View {
             Section {
                 if preview.isSearching {
                     HStack { ProgressView(); Text(L("WALLPAPER_SEARCHING_TITLE")) }
-                } else if preview.cacheDirectory == nil {
-                    Text(L("WALLPAPER_NO_DEVICES")).foregroundStyle(.secondary)
                 } else {
                     HStack(spacing: 12) {
                         CPBitmapPreviewView(title: L("WALLPAPER_PREVIEW_DARK"),
                                             image: preview.darkImage)
                         CPBitmapPreviewView(title: L("WALLPAPER_PREVIEW_LIGHT"),
                                             image: preview.lightImage)
+                    }
+                    if !preview.hasCacheFiles {
+                        Text(cacheHint).font(.caption).foregroundStyle(.secondary)
                     }
                 }
             } header: {
@@ -77,11 +78,18 @@ struct WallpaperView: View {
 
     private var previewFooter: String {
         guard let cacheDirectory = preview.cacheDirectory else {
-            return L("WALLPAPER_CACHE_NOT_FOUND")
+            return cacheHint
         }
         return LF("WALLPAPER_FOOTER_PREVIEW",
                   preview.wallpaperName ?? L("WALLPAPER_NAME_UNAVAILABLE"),
                   cacheDirectory)
+    }
+
+    /// "Connected but no cache" is NOT the same as "no CarPlay device".
+    private var cacheHint: String {
+        if preview.pairingProbeFailed { return L("WALLPAPER_CACHE_PROBE_FAILED") }
+        if preview.pairings > 0 { return L("WALLPAPER_PAIRED_NO_CACHE") }
+        return L("WALLPAPER_NO_DEVICES")
     }
 
     private func refresh() {

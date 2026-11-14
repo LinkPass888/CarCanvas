@@ -44,7 +44,7 @@
 "BROWSER_SEARCH_FILES" = "搜索此文件夹";
 "BROWSER_SEARCH_FILES_EMPTY" = "请尝试其他文件或文件夹名称。";
 "BROWSER_SHARE" = "分享";
-"BROWSER_TITLE" = "CarPlay Wallpaper";
+"BROWSER_TITLE" = "CarPlay 壁纸";
 "BROWSER_WALLPAPER_CACHE_EMPTY" = "未找到 CarPlayWallpaper 图像缓存。\n请先打开一次 CarPlay，然后重试。";
 "BROWSER_WORKSPACE" = "工作区";
 "BROWSER_WORKSPACE_NAME" = "CarCanvas";
@@ -86,7 +86,7 @@
 "HISTORY_SOURCE_CARPLAY" = "CarPlay 导出";
 "HISTORY_SOURCE_LOCAL" = "本地创建";
 "HISTORY_TITLE" = "历史";
-"ROOT_CARPLAY_WALLPAPER" = "CarPlay Wallpaper";
+"ROOT_CARPLAY_WALLPAPER" = "CarPlay 壁纸";
 "ROOT_CARPLAY_WALLPAPER_SUBTITLE" = "浏览 CarPlayWallpaper 图像缓存";
 "ROOT_DEVELOPER" = "Developed by Dcsyhi";
 "ROOT_HERO_SUBTITLE" = "在一处更新 CarPlayWallpaper 并整理 CPBitmap 导出文件。";
@@ -162,3 +162,5 @@
 "WALLPAPER_SECTION_PREVIEW" = "壁纸预览";
 "WALLPAPER_PREVIEW_DARK" = "深色预览";
 "WALLPAPER_PREVIEW_LIGHT" = "浅色预览";
+"WALLPAPER_PAIRED_NO_CACHE" = "已连接 CarPlay，但还没有壁纸缓存。请在 CarPlay 设置 → 壁纸中，将上两排的 6 张带图案壁纸各选一次，然后返回。现在仍可以先创建本地 CPBitmap 文件。";
+"WALLPAPER_CACHE_PROBE_FAILED" = "无法检查 CarPlay 状态（App Group 或系统访问不可用）。仍可以先创建本地 CPBitmap 文件。";

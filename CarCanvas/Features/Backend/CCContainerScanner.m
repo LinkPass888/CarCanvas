@@ -5,7 +5,6 @@
 
 #import "CCContainerScanner.h"
 #import <dlfcn.h>
-#import <mach-o/dyld.h>
 #import <sys/mount.h>
 #import <sys/stat.h>
 #import <sys/xattr.h>
@@ -13,50 +12,59 @@
 #import <string.h>
 #import <time.h>
 
-// fsgetpath is not in the public SDK headers on every toolchain, so resolve it
-// at runtime rather than depending on a private header or a link-time symbol.
 typedef ssize_t (*CCFsGetPathFn)(char *, size_t, fsid_t *, uint64_t);
 
 static CCFsGetPathFn CCCopyFsGetPath(void)
 {
     static CCFsGetPathFn cached;
     static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        cached = (CCFsGetPathFn)dlsym(RTLD_DEFAULT, "fsgetpath");
-    });
+    dispatch_once(&once, ^{ cached = (CCFsGetPathFn)dlsym(RTLD_DEFAULT, "fsgetpath"); });
     return cached;
+}
+
+/// The ORIGINAL CarCanvas read this plist. It lives inside each container and
+/// is readable without a sandbox extension. Prefer it over xattr, which is not
+/// present on every iOS build (and which the original app never used).
+static NSString *CCIdentifierFromMetadata(NSString *path)
+{
+    NSString *plistPath = [path stringByAppendingPathComponent:@".com.apple.mobile_container_manager.metadata.plist"];
+    NSData *data = [NSData dataWithContentsOfFile:plistPath];
+    if (!data) return nil;
+    id plist = [NSPropertyListSerialization propertyListWithData:data options:0 format:NULL error:NULL];
+    if (![plist isKindOfClass:[NSDictionary class]]) return nil;
+    NSString *identifier = [(NSDictionary *)plist objectForKey:@"MCMMetadataIdentifier"];
+    return [identifier isKindOfClass:[NSString class]] ? identifier : nil;
 }
 
 NSString *CCContainerIdentifier(NSString *path)
 {
     if (path.length == 0) return nil;
 
+    // 1. The original route: the container metadata plist.
+    NSString *fromPlist = CCIdentifierFromMetadata(path);
+    if (fromPlist.length) return fromPlist;
+
+    // 2. Fallback for builds that expose the identifier on the xattr instead.
     for (NSString *key in @[@"com.apple.containermanager.identity",
                             @"com.apple.containermanager.identifier"]) {
         ssize_t size = getxattr(path.fileSystemRepresentation, key.UTF8String, NULL, 0, 0, XATTR_NOFOLLOW);
         if (size <= 0 || size > 65536) continue;
-
         NSMutableData *data = [NSMutableData dataWithLength:(NSUInteger)size];
         ssize_t count = getxattr(path.fileSystemRepresentation, key.UTF8String,
                                  data.mutableBytes, data.length, 0, XATTR_NOFOLLOW);
         if (count <= 0) continue;
         data.length = (NSUInteger)count;
-
         NSString *value = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
         if (value.length == 0) continue;
 
-        NSMutableCharacterSet *ignored = [NSCharacterSet.whitespaceAndNewlineCharacterSet mutableCopy];
-        [ignored addCharactersInString:[NSString stringWithFormat:@"%C", (unichar)0]];
-
+        NSCharacterSet *ignored = [NSCharacterSet whitespaceAndNewlineCharacterSet];
         for (NSString *line in [value componentsSeparatedByString:@"\n"]) {
             NSString *text = [line stringByTrimmingCharactersInSet:ignored];
             if ([text hasPrefix:@"identifier:"]) {
-                NSString *identifier = [text substringFromIndex:11];
-                identifier = [identifier stringByTrimmingCharactersInSet:ignored];
+                NSString *identifier = [[text substringFromIndex:11] stringByTrimmingCharactersInSet:ignored];
                 if (identifier.length) return identifier;
             }
         }
-
         NSString *flat = [value stringByTrimmingCharactersInSet:ignored];
         if (flat.length && ![flat containsString:@":"] && ![flat containsString:@"\n"]) return flat;
     }
@@ -68,8 +76,6 @@ NSInteger CCScanApplicationContainers(NSTimeInterval budget, BOOL (^visitor)(NSS
     CCFsGetPathFn fsgetpath = CCCopyFsGetPath();
     if (!fsgetpath) return -1;
 
-    // Use a file we own to derive a sane upper inode bound instead of walking
-    // the whole volume. Placard does the same with a fixed margin.
     NSString *probe = [NSTemporaryDirectory() stringByAppendingPathComponent:NSUUID.UUID.UUIDString];
     int fd = open(probe.fileSystemRepresentation, O_CREAT | O_EXCL | O_RDWR | O_CLOEXEC, 0600);
     if (fd < 0) return -1;
