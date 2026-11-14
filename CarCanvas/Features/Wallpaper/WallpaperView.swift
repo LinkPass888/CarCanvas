@@ -190,12 +190,13 @@ struct WallpaperView: View {
     private func exportCurrent() {
         guard !cacheFiles.isEmpty else { message = L("WALLPAPER_EXPORT_NOTHING"); return }
         isWorking = true
+        let files = cacheFiles
+        let baseName = settings.exportBaseName
         Task {
             var outcome: String
             do {
-                let count = try await Task.detached(priority: .userInitiated) {
-                    try WallpaperService().exportExistingCacheFiles(from: cacheFiles,
-                                                                   baseName: settings.exportBaseName)
+                let count: Int = try await Task.detached(priority: .userInitiated) {
+                    try WallpaperService().exportExistingCacheFiles(from: files, baseName: baseName)
                 }.value
                 outcome = count == 0 ? L("WALLPAPER_EXPORT_NOTHING") : L("HISTORY_EXPORT_DONE")
             } catch {
