@@ -44,9 +44,5 @@
 	<string>Select images to use as CarPlay wallpapers.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
-	<!-- Must be byte-for-byte identical to the App Group in CarCanvas.entitlements.
-	     scripts/verify-repository.py enforces this. Replace with YOUR OWN group id. -->
-	<key>CCAppGroupIdentifier</key>
-	<string>group.example.carcanvas.wq</string>
 </dict>
 </plist>

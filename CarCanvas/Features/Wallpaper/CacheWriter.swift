@@ -38,8 +38,7 @@ final class CacheWriter {
         let fallback = darkData ?? lightData
         guard fallback != nil else { throw CCError.templateUnreadable(entry.baseName) }
 
-        return try WQAccess.shared.withAccess(containerPath: resolved.containerPath,
-                                              identifier: WQWhitelist.carPlayWallpaperBundleID) {
+        return try WQAccess.shared.withAccess(containerPath: resolved.containerPath) {
             var ok = 0, failed = 0
             for target in selected {
                 // Prefer the matching appearance; fall back to the single

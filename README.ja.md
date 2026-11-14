@@ -60,18 +60,15 @@ Apple は `.cpbitmap` 形式のドキュメントを公開していません。�
 
 ## 6. 署名と App Group（重要）
 
-**自分自身の** Apple Developer アカウントで App Group を登録し、同じ `group.<your-name>.xxx` を以下の 2 か所に設定する必要があります。CI の検証スクリプトは 2 つの値が一致することを確認します。
+**グループ名は重要ではありません。署名したツールが入れたものが使われます。** CarCanvas は実行時に `SecTaskCopyValueForEntitlement` で自分自身の署名から `com.apple.security.application-groups` を読み取り、`containerURL(forSecurityApplicationGroupIdentifier:)` を順に試して実際に開けたものを使います。WQFiles と Regitela と同じ方式なので、ソース内のプレースホルダを書き換える必要はありません。
 
-```text
-CarCanvas/CarCanvas.entitlements  ->  com.apple.security.application-groups = [ group.<your-name>.xxx ]
-CarCanvas/Info.plist             ->  CCAppGroupIdentifier                 = group.<your-name>.xxx
-```
-
-- 既定のプレースホルダは `group.example.carcanvas.wq` で、変更しないと動作しません。
-- CI が出力するのは**未署名 IPA** です。そのままではインストールできず、自分で署名する必要があります。entitlement はコード署名の中にしか存在しないため、未署名パッケージには App Group がなく、実行時に `containerURL(forSecurityApplicationGroupIdentifier:)` は nil を返します。
-- 無料の Personal Team では実用可能な App Group entitlement を取得できません（Xcode は "Personal development teams do not support the App Groups capability" と表示します）。有料 ADP または同等の署名能力を用意してください。
-- 旧版 CarCanvas はエンタープライズ証明書を必要としていました。本版は `com.apple.mobile.MobileHouseArrest` の identity を騙らなくなったため、理論上エンタープライズ証明書は必須ではなくなりましたが、App Group entitlement に署名できる証明書と profile は引き続き必要です。
-- サイドロードツールは再署名時に元パッケージから entitlements をコピーします。再署名フローが `com.apple.security.application-groups` を保持することを確認してください。
+- CI が生成するのは**未署名 IPA** で、そのままではインストールできません。entitlement はコード署名の中にあるため、未署名ビルドには App Group がなく、コンテナに到達できません。
+- **推奨**: [Impactor](https://github.com/claration/impactor/releases)、AltStore、SideStore で署名します。Apple ID 用の App Group を自動で作成し保持します。
+- 証明書（`.p12`）+ profile で署名する場合、profile に App Group が必要です。市販の多くはワイルドカード profile（App ID `*`）で App Group を含められず、署名に失敗するか実行時に "no accessible app group" になります。
+- Sideloadly は App Group を**付与しません**。それで署名したビルドは "NONE" と表示します。
+- 自分のアカウントで行う場合: Developer ポータル → Identifiers → App Groups で作成 → そのグループを有効にした明示的 App ID を作成 → profile を生成 → その profile で署名。
+- `CarCanvas/CarCanvas.entitlements` の `group.example.carcanvas.wq` は Xcode 用の既定値にすぎません。自分のチームのグループに置き換えるか、署名ツールによる注入に任せてください。
+- 前回の実行が中断された場合、App Group の `Library/Caches` がシンボリックリンクのまま残り、以降のクエリがすべて失敗します。起動時に検出し、邪魔なものを**リネームして退避**（削除はしない）してからディレクトリを作り直します。
 
 ## 7. ビルド
 

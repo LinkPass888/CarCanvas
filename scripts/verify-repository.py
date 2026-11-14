@@ -203,26 +203,40 @@ for lang in LANGS:
 
 
 print()
-print("== 4. App Group identifier consistency ==")
+print("== 4. App Group is discovered at runtime ==")
+aga_h = ROOT / "CarCanvas" / "Features" / "Backend" / "CCAppGroup.h"
+aga_m = ROOT / "CarCanvas" / "Features" / "Backend" / "CCAppGroup.m"
 ent = ROOT / "CarCanvas" / "CarCanvas.entitlements"
 info = ROOT / "CarCanvas" / "Info.plist"
-group = info_group = None
+if check(aga_h.is_file() and aga_m.is_file(), "runtime App Group resolver present",
+         "CCAppGroup.h/.m missing"):
+    m_text = aga_m.read_text(encoding="utf-8")
+    check("SecTaskCopyValueForEntitlement" in m_text,
+          "reads the entitlement from its own signature",
+          "does not read the signed entitlement")
+    check("containerURLForSecurityApplicationGroupIdentifier" in m_text,
+          "only accepts a reachable group (entitled != reachable)",
+          "reachability check missing")
+    check("CCAppGroupResetCachesDirectory" in m_text and "rename(" in m_text,
+          "stale Caches symlink is moved aside, not deleted",
+          "no interrupted-swap recovery")
+    # Private API must be resolved dynamically, never via a private header.
+    check("dlopen(\"/System/Library/Frameworks/Security.framework/Security\"" in m_text,
+          "SecTask resolved with dlopen/dlsym (no private header)",
+          "SecTask is not resolved dynamically")
+    check("#import <Security/SecTask.h>" not in m_text,
+          "no private SecTask header imported",
+          "private SecTask header imported")
 if check(ent.is_file() and info.is_file(), "entitlements and Info.plist exist",
          "entitlements or Info.plist missing"):
-    try:
-        vals = plistlib.loads(ent.read_bytes()).get("com.apple.security.application-groups") or []
-        group = vals[0] if vals else None
-    except Exception as exc:
-        check(False, "entitlements parsed", "entitlements parse error: %s" % exc)
-    try:
-        info_group = plistlib.loads(info.read_bytes()).get("CCAppGroupIdentifier")
-    except Exception as exc:
-        check(False, "Info.plist parsed", "Info.plist parse error: %s" % exc)
-    check(group is not None and group == info_group,
-          "App Group matches in both files (%s)" % group,
-          "App Group mismatch: entitlements=%r Info.plist=%r" % (group, info_group))
-    if info_group:
-        print("       NOTE: %s is a placeholder; users must set their own group." % info_group)
+    import plistlib as _pl
+    ent_groups = _pl.loads(ent.read_bytes()).get("com.apple.security.application-groups") or []
+    check(bool(ent_groups),
+          "entitlements declares at least one App Group capability (%s)" % (ent_groups[0] if ent_groups else "-"),
+          "entitlements declares no App Group")
+    check("CCAppGroupIdentifier" not in _pl.loads(info.read_bytes()),
+          "Info.plist no longer hard-codes a group identifier",
+          "Info.plist still hard-codes CCAppGroupIdentifier")
 
 
 print()

@@ -60,18 +60,15 @@ Older iOS versions are no longer supported because the container-access backend 
 
 ## 6. Signing and App Group (important)
 
-You must register an App Group with **your own** Apple Developer account and set the same `group.<your-name>.xxx` value in both places below. The CI verification script checks that the two values match.
+**The group name does not matter — whatever the signer embeds is used.** At runtime CarCanvas calls `SecTaskCopyValueForEntitlement` to read the `com.apple.security.application-groups` array from its own signature, then tries `containerURL(forSecurityApplicationGroupIdentifier:)` on each and keeps the first one it can actually open. This matches what WQFiles and Regitela do, so no placeholder in the source needs editing.
 
-```text
-CarCanvas/CarCanvas.entitlements  ->  com.apple.security.application-groups = [ group.<your-name>.xxx ]
-CarCanvas/Info.plist             ->  CCAppGroupIdentifier                 = group.<your-name>.xxx
-```
-
-- The default placeholder is `group.example.carcanvas.wq`; leaving it unchanged cannot work.
-- CI produces an **unsigned IPA**. It cannot be installed as-is; you must sign it yourself. Entitlements exist only in the code signature, so an unsigned package has no App Group and `containerURL(forSecurityApplicationGroupIdentifier:)` returns nil at runtime.
-- A free personal team in practice cannot obtain a usable App Group entitlement (Xcode reports "Personal development teams do not support the App Groups capability"). Plan for a paid Apple Developer Program membership or an equivalent signing capability.
-- Older CarCanvas required an enterprise certificate. This version no longer impersonates the `com.apple.mobile.MobileHouseArrest` identity, so an enterprise certificate is theoretically no longer mandatory, but a certificate and provisioning profile that can sign the App Group entitlement are still required.
-- Sideloading tools copy entitlements from the original package when re-signing. Make sure your re-signing flow preserves `com.apple.security.application-groups`.
+- CI produces an **unsigned IPA**; it cannot be installed as-is. Entitlements live in the code signature, so an unsigned build has no App Group and cannot reach any container.
+- **Recommended:** sign with [Impactor](https://github.com/claration/impactor/releases), AltStore or SideStore. They create and preserve an App Group for your Apple ID automatically.
+- Signing with a certificate (`.p12`) + profile requires the profile to contain an App Group. Most sellers ship wildcard profiles (App ID `*`), which cannot carry one; signing then fails or the app reports "no accessible app group" at runtime.
+- Sideloadly does **not** add an App Group; builds signed with it report "NONE".
+- With your own account: Developer portal → Identifiers → App Groups, create one, create an explicit App ID with that group enabled, generate a profile, and sign with it.
+- The `group.example.carcanvas.wq` value in `CarCanvas/CarCanvas.entitlements` is only an Xcode default. Replace it with a group registered to your team, or let the signing tool inject one.
+- If a previous run was interrupted, the App Group's `Library/Caches` may be left as a symlink, which breaks every later query. On launch the app detects this and **renames** whatever is in the way (nothing is deleted) before recreating the directory.
 
 ## 7. Building
 

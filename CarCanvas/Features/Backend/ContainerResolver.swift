@@ -65,8 +65,7 @@ final class ContainerResolver {
             throw CCError.outsideWhitelist(cacheDirectory)
         }
 
-        let files = try WQAccess.shared.withAccess(containerPath: container,
-                                                   identifier: WQWhitelist.carPlayWallpaperBundleID) {
+        let files = try WQAccess.shared.withAccess(containerPath: container) {
             guard let names = try? FileManager.default.contentsOfDirectory(atPath: cacheDirectory) else {
                 throw CCError.cacheNotFound
             }

@@ -60,18 +60,15 @@ Apple 没有公开 `.cpbitmap` 格式文档。公开解码器在通道顺序（B
 
 ## 6. 签名与 App Group（重要）
 
-需要你**自己**的 Apple Developer 账号注册 App Group，并把同一个 `group.<你的名字>.xxx` 写入下面两处。CI 的校验脚本会检查两者一致。
+**App Group 名字不重要，谁签名就用谁的。** CarCanvas 在运行时用 `SecTaskCopyValueForEntitlement` 读取自己被签进去的 `com.apple.security.application-groups`，逐个尝试 `containerURL(forSecurityApplicationGroupIdentifier:)`，取第一个真正能打开的。这与 WQFiles、Regitela 的做法一致。所以不需要改代码里的占位值。
 
-```text
-CarCanvas/CarCanvas.entitlements  ->  com.apple.security.application-groups = [ group.<你的名字>.xxx ]
-CarCanvas/Info.plist             ->  CCAppGroupIdentifier                 = group.<你的名字>.xxx
-```
-
-- 默认占位值是 `group.example.carcanvas.wq`，不改无法工作。
-- CI 产出的是**未签名 IPA**，不能直接安装；必须自己签名。entitlement 只存在于代码签名里，未签名包没有 App Group，运行时 `containerURL(forSecurityApplicationGroupIdentifier:)` 会返回 nil。
-- 个人免费账号在实践中拿不到可用的 App Group entitlement（Xcode 报 "Personal development teams do not support the App Groups capability"）；按「需要付费 ADP 或等效签名能力」准备。
-- 旧版 CarCanvas 要求企业证书。本版因为不再冒用 `com.apple.mobile.MobileHouseArrest` 身份，理论上不再强制企业证书，但仍需能签 App Group 的证书/profile。
-- 侧载工具重签时会从原包复制 entitlements，请确保你的重签流程保留 `com.apple.security.application-groups`。
+- CI 产出的是**未签名 IPA**，不能直接安装；必须自己签名。entitlement 只存在于代码签名里，未签名包没有 App Group，运行时拿不到容器。
+- **推荐**：用 [Impactor](https://github.com/claration/impactor/releases)、AltStore 或 SideStore 签，它们会按你的 Apple ID 自动创建并保留 App Group。
+- 用证书（`.p12`）+ profile 签时，profile 必须带 App Group。市面上大量卖的是通配符 profile（App ID `*`），无法包含 App Group，会签名失败或运行时报 "no accessible app group"。
+- Sideloadly **不会**加 App Group，用它签的包会提示 "NONE"。
+- 自己账号签：开发者后台 → Identifiers → App Groups 建一个 → 建显式 App ID 并勾上该 Group → 生成 profile → 用该 profile 签名。
+- `CarCanvas/CarCanvas.entitlements` 里的 `group.example.carcanvas.wq` 只是给 Xcode 用的默认值，改成你自己团队的即可，也可以完全依赖签名工具注入。
+- 若上次运行被中断，App Group 的 `Library/Caches` 可能残留成符号链接，导致后续 query 全部失败。应用启动时会检测并把挡路的东西**改名移开**（不删除），再重建目录。
 
 ## 7. 构建
 

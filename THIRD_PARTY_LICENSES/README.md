@@ -52,3 +52,16 @@ We **deliberately do not import** the upstream `worse_query` `ContentView.swift`
 
 - `docs/app-icon.png` and `docs/carplay-wallpaper-picker.png` come from the upstream public CarCanvas repository (https://github.com/Dcsyhi1998/CarCanvas). That repository has no explicit license (GitHub reports `license: null`), so the rights status of these images must be confirmed by the user; they are not covered by this project's GPL grant.
 - [0xjohnnydev/FilzaSlop](https://github.com/0xjohnnydev/FilzaSlop) and [Dcsyhi/CarCanvas](https://github.com/Dcsyhi1998/CarCanvas) are credited for prior research and the original app. No closed-source binaries from either project are included in this repository.
+
+## Design references (not vendored)
+
+The runtime App Group discovery in `CarCanvas/Features/Backend/CCAppGroup.m` and
+the interrupted-swap recovery follow the publicly documented approach used by:
+
+- [kolbicz/WQFiles](https://github.com/kolbicz/WQFiles) — `wq_app_group()` and
+  `WQRecoverCacheSwapAtPath()`
+- [ichitaso/Regitela](https://github.com/ichitaso/Regitela) — `worse_query_group()`
+
+No source from either project is copied into this repository; only the technique
+of reading `com.apple.security.application-groups` from the app's own signature
+via `SecTaskCopyValueForEntitlement` is reimplemented here.

@@ -15,8 +15,7 @@ final class WallpaperService {
     func loadTemplate() throws -> CPBitmapTemplate {
         let resolved = try ContainerResolver().resolve()
         guard let target = resolved.files.first else { throw CCError.noCacheFiles }
-        return try WQAccess.shared.withAccess(containerPath: resolved.containerPath,
-                                              identifier: WQWhitelist.carPlayWallpaperBundleID) {
+        return try WQAccess.shared.withAccess(containerPath: resolved.containerPath) {
             guard let data = try? Data(contentsOf: URL(fileURLWithPath: target.path),
                                        options: [.mappedIfSafe]) else {
                 throw CCError.templateUnreadable(target.fileName)

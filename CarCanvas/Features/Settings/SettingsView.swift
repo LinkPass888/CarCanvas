@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject private var settings: SettingsStore
+    private var QAccessGroups: [String] { WQAccess.shared.entitledGroups }
     @State private var showGuide = false
     @State private var showClear = false
 
@@ -29,7 +30,11 @@ struct SettingsView: View {
             Section(L("SETTINGS_SECTION_ABOUT")) {
                 LabeledContent("Version", value: "2.0.0 (1)")
                 LabeledContent("Bundle", value: Bundle.main.bundleIdentifier ?? "—")
-                LabeledContent("App Group", value: WQAccess.shared.appGroupIdentifier)
+                LabeledContent("App Group", value: WQAccess.shared.appGroupIdentifier ?? "NONE")
+                if QAccessGroups.isEmpty {
+                    Text("This build was signed without an App Group. Re-sign it with a tool that keeps `com.apple.security.application-groups` (Impactor, AltStore, SideStore, or your own profile). Any group name works; CarCanvas reads it from its signature.")
+                        .font(.caption).foregroundStyle(.orange)
+                }
                 Text(L("SETTINGS_ABOUT_DETAIL")).font(.caption).foregroundStyle(.secondary)
             }
 

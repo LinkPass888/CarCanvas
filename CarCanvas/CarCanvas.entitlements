@@ -2,8 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Replace BOTH occurrences with your own registered App Group identifier:
-	     this file and CCAppGroupIdentifier in CarCanvas/Info.plist. -->
+	<!-- CarCanvas discovers its App Group at runtime from whatever the signer
+	     embeds (same approach as WQFiles / Regitela), so the name below is only
+	     a sane default for Xcode. Replace it with a group registered to YOUR
+	     team, or let Impactor / AltStore / SideStore create one while signing. -->
 	<key>com.apple.security.application-groups</key>
 	<array>
 		<string>group.example.carcanvas.wq</string>
