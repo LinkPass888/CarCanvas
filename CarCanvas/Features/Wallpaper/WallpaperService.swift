@@ -12,12 +12,28 @@ final class WallpaperService {
         self.channelOrder = channelOrder
     }
 
-    func loadTemplate() throws -> CPBitmapTemplate {
+    func loadTemplate(for selected: WallpaperTarget? = nil) throws -> CPBitmapTemplate {
         let resolved = try ContainerResolver().resolve()
         return try WQAccess.shared.withAccess(containerPath: resolved.containerPath) {
-            guard let target = try ContainerResolver.cacheFiles(in: resolved.cacheDirectory).first else { throw CCError.noCacheFiles }
+            let files = try ContainerResolver.cacheFiles(in: resolved.cacheDirectory)
+            let target: WallpaperTarget
+            if let selected {
+                guard let current = files.first(where: {
+                    $0.path == selected.path && $0.fileName == selected.fileName && $0.appearance == selected.appearance
+                }) else { throw CCError.templateUnreadable(selected.fileName) }
+                target = current
+            } else {
+                guard let first = files.first else { throw CCError.noCacheFiles }
+                target = first
+            }
             return try CPBitmapTemplate.parse(Data(contentsOf: URL(fileURLWithPath: target.path)))
         }
+    }
+
+    /// A selected cache supplies the fallback geometry; never substitute the
+    /// first Dark/Light file or create a paired export for this single-file edit.
+    func replacementData(imageURL: URL, target: WallpaperTarget) throws -> Data {
+        try autoreleasepool { try encode(photo(at: imageURL), target: target) }
     }
 
     /// Encode each photo separately. Only after BOTH succeeded does savePair
@@ -71,27 +87,33 @@ final class WallpaperService {
                       try ContainerResolver.cacheFiles(in: resolved.cacheDirectory).contains(where: { $0.path == target.path && $0.byteCount > 0 && $0.byteCount <= 256 * 1024 * 1024 }) else {
                     throw CCError.templateUnreadable(target.fileName)
                 }
-                return autoreleasepool { () -> CGImage? in
-                    let url = URL(fileURLWithPath: target.path)
-                    var readError: NSError?
-                    do {
-                        // Native decoding must not be rejected by our narrower
-                        // raw-template parser. Only the detached thumbnail escapes.
-                        if let image = CCCopyCPBitmapImage(url, &readError), let small = Self.thumbnail(image) { return small }
-                        CCLog.info("system CPBitmap preview unavailable for \(target.fileName): \(readError?.localizedDescription ?? "no image"); trying template")
-                        let data = try Data(contentsOf: url)
-                        let template = try CPBitmapTemplate.parse(data)
-                        if let image = template.preview(order: channelOrder), let small = Self.thumbnail(image) { return small }
-                        throw CCError.renderFailed
-                    } catch {
-                        CCLog.error("CPBitmap preview failed for \(target.fileName): system=\(readError?.localizedDescription ?? "no image"); template=\(error.localizedDescription)")
-                        return nil
-                    }
-                }
+                return previewImage(at: URL(fileURLWithPath: target.path))
             }
         } catch {
             CCLog.error("CPBitmap preview access failed for \(target.fileName): \(error.localizedDescription)")
             return nil
+        }
+    }
+
+    /// Also used for validated app-local backups. Decode one original at a
+    /// time and return only a small, independently owned image.
+    func previewImage(at url: URL) -> CGImage? {
+        autoreleasepool {
+            var readError: NSError?
+            do {
+                let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
+                guard values.isRegularFile == true, values.isSymbolicLink != true,
+                      let size = values.fileSize, size > 0, size <= 256 * 1024 * 1024 else { throw CCError.renderFailed }
+                // Native decoding must not be rejected by our narrower parser.
+                if let image = CCCopyCPBitmapImage(url, &readError), let small = Self.thumbnail(image) { return small }
+                CCLog.info("system CPBitmap preview unavailable for \(url.lastPathComponent): \(readError?.localizedDescription ?? "no image"); trying template")
+                let template = try CPBitmapTemplate.parse(Data(contentsOf: url))
+                guard let image = template.preview(order: channelOrder), let small = Self.thumbnail(image) else { throw CCError.renderFailed }
+                return small
+            } catch {
+                CCLog.error("CPBitmap preview failed for \(url.lastPathComponent): system=\(readError?.localizedDescription ?? "no image"); template=\(error.localizedDescription)")
+                return nil
+            }
         }
     }
 
@@ -107,7 +129,8 @@ final class WallpaperService {
         return context.makeImage()
     }
 
-    private func encode(_ image: CGImage, fallbackTemplate: CPBitmapTemplate? = nil) throws -> Data {
+    private func encode(_ image: CGImage, fallbackTemplate: CPBitmapTemplate? = nil,
+                        target: WallpaperTarget? = nil) throws -> Data {
         if CCBitmapWriterIsAvailable() {
             // Unique destinations and distinct UIImage instances for the two
             // photos; never reuse the first photo's bytes as the second output.
@@ -121,7 +144,7 @@ final class WallpaperService {
             CCLog.info("system CPBitmap writer failed (\(writeError?.localizedDescription ?? "empty output")); using validated template")
         }
         if let fallbackTemplate { return try fallbackTemplate.render(image: image, order: channelOrder) }
-        return try loadTemplate().render(image: image, order: channelOrder)
+        return try loadTemplate(for: target).render(image: image, order: channelOrder)
     }
 
     private func sanitized(_ raw: String) -> String {

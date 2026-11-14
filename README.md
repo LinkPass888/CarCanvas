@@ -39,16 +39,13 @@ The app performs a version gate at startup. Any system version outside the enabl
 
 This is **not** a kernel exploit, **not** a jailbreak, provides no root, does not inject into other processes, does not use the network and uploads no data.
 
-Security boundary: the app only locates and overwrites `.cpbitmap` files that already exist in the `com.apple.CarPlayWallpaper` cache directory on the device. It offers no arbitrary path input and no general-purpose file manager. To locate the CarPlayWallpaper container it enumerates first-level application data container directories and reads each container's `.com.apple.mobile_container_manager.metadata.plist`; it does not read those apps' document contents. Before writing it automatically backs the target files up into the app's Documents directory; after overwriting it verifies the file size; the user must confirm the overwrite in an explicit dialog that lists the selected Dark/Light destinations; the backup makes the operation rollback-able. Public information about the affected system behaviour is insufficient, and on-device verification is required.
+Security boundary: photo replacement writes only the explicitly selected, existing whitelist-named cache file in the identified `com.apple.CarPlayWallpaper` container. Container identity is verified through query/LaunchServices mappings and scoped identity probes; no app documents are browsed. There is no arbitrary path input or general file manager. Photos and restores are staged inside the app until the user confirms **Apply**. Each file is backed up before replacement and byte-verified after writing. Only an explicit restore may re-create its exact backed-up filename in the existing fixed cache directory. Applied/pending status is saved before NeoSpring is requested. Partial failures retain successful file status and leave failed/remaining edits pending without automatic logout. **On-device verification is required.**
 
 ## 4. How CPBitmap is generated
 
-Apple never documented `.cpbitmap`, and public decoders disagree with each other. The generation order is therefore:
+Apple never documented `.cpbitmap`, and public decoders disagree. The system reader is tried first for existing previews, with a validated raw-template decoder as fallback. Only small thumbnails are retained.
 
-1. **The system's own CPBitmap writer first** — resolved dynamically via `writeToCPBitmapFile:flags:`. This is what the original CarCanvas did, and it needs no cache file on the device, so "Create Local CPBitmap" works before CarPlay has ever produced one.
-2. **Template rendering as a fallback** — only when the system writer is unavailable. It reads an existing cache file as a template, derives geometry from `fileSize = width × rowStride × height + trailerLength`, replaces only the pixel region and **keeps the trailer bytes untouched**.
-
-The BGRA / RGBA channel-order switch in Settings applies to the fallback path. Both paths need on-device verification; this repository does not claim a device test was performed.
+Picked photos are encoded in the background using the system writer, resolved dynamically via `writeToCPBitmapFile:flags:`. If that is unavailable or fails, the **exact selected cache file** supplies a validated template: replace its pixel region and preserve its complete metadata/trailer. Another Dark/Light file is never substituted. The BGRA / RGBA setting affects only the template fallback. Encoded data and a small preview are saved in the app-local `StagedWallpapers/` directory, not in the system cache, until Apply. Both paths need on-device verification.
 
 ## 5. Version requirements
 
@@ -84,7 +81,7 @@ brew install xcodegen && xcodegen generate && open CarCanvas.xcodeproj
 
 CI runs the same toolchain automatically through `.github/workflows/build-ipa.yml`. `scripts/build-unsigned-ipa.sh` compiles first, then manually injects the `en`, `ja` and `zh-Hans` `.strings` sets into the bundle, packages the result into a `Payload/` IPA and runs an integrity self-check.
 
-`scripts/verify-repository.py` is the acceptance script you can run locally. It checks, among other things, that no IPA is present, that 159+ localization keys and their placeholders match across the three `.strings` files, and that the App Group identifier is identical in both places.
+`scripts/verify-repository.py` is the local acceptance script. It checks for forbidden release artifacts, matching localization keys/placeholders, runtime App Group discovery, and cache-edit UI/security regression guards. It does not replace an iOS build or on-device tests.
 
 ```sh
 python3 scripts/verify-repository.py
@@ -93,22 +90,17 @@ python3 scripts/verify-repository.py
 
 > **Note:** Running `xcodegen generate` and pressing Run in Xcode builds the app but does **not** inject the `.lproj` bundles; all `L(...)` keys appear literally. Use `scripts/build-unsigned-ipa.sh` (or CI) for a localized build.
 
-## 8. Usage (4 steps)
+## 8. Usage (5 steps)
 
-1. In CarPlay **Settings → Wallpaper**, select each of the six patterned wallpapers in the top two rows once so that the cache files are generated. The solid-color wallpapers in the bottom row do not generate cache files.
+1. In CarPlay **Settings → Wallpaper**, select each of the six patterned wallpapers in the top two rows once. The three solid colors in the bottom row do not generate cache files.
 
    ![CarPlay wallpaper picker](docs/carplay-wallpaper-picker.png)
 
-   | Position | Wallpapers | Cache files |
-   | --- | --- | --- |
-   | Top two rows | Six patterned wallpapers (Blue, Purple, Gray, Green, Brown, Red) | Generated as Dark / Light `.cpbitmap` pairs |
-   | Bottom row | Three solid colors | Not created |
-
-   The `-14` suffix in file names may differ by environment; the app uses the file names actually found on the device. The in-app setup guide walks through the same four steps.
-
-2. In the app, pick an image and generate a local CPBitmap. Nothing changes on the CarPlay side at this point.
-3. Open **History**, choose the export and overwrite the matching Dark / Light cache pair. Each target requires an explicit confirmation, and a backup is written before the overwrite.
-4. **Power the iPhone off and back on once** so that CarPlay reloads the overwritten cache.
+   Open **CarPlay** in CarCanvas and tap **Retry**. Actual filenames, including device-dependent numeric suffixes, are preserved. Same-name Dark/Light files are grouped for display, not for automatic paired replacement. The only tabs are **CarPlay** and **Settings**.
+2. Tap the **left-aligned cache preview** for the exact file to replace and choose a photo. No separate Dark/Light switch is needed. Photo encoding happens in the background; the pending photo and its preview survive reopening the app. The system cache is still unchanged.
+3. **Retry** becomes **Apply** with a badge counting pending filenames, including restores. **Clear** to the right of a preview cancels that pending edit only; it never deletes the system cache or its backup. Confirm **Apply** to write only the pending files. Successful file status is persisted before the NeoSpring interface reload is attempted. A failed operation does not request automatic logout; successful files stay applied and failed/remaining edits remain pending. NeoSpring is not a full system logout and may not succeed on every device.
+4. **Restore** beside a preview is enabled only after a replacement is applied and a valid backup exists. The single **Restore** button beside the **Backups** heading stages every saved original; rows below contain backup information only. Restore is pending too: use **Apply** to write it or **Clear** to cancel it. Legacy/recovered copies are labeled and are not guaranteed to be system originals.
+5. **Settings → Clear CarPlay Wallpaper Cache** deletes the whitelisted system cache, all local backups and their index, and pending/applied edit state. It keeps older local exports/history. Cleanup is irreversible and does not log out automatically. Log out manually, reconnect CarPlay, select the six system patterns again, and tap **Retry**. Normally restart the phone only if needed, and verify default regeneration on the device.
 
 ## 9. Simplified Chinese support
 

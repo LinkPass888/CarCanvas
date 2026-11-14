@@ -1,7 +1,9 @@
 import SwiftUI
 
+@MainActor
 struct SettingsView: View {
     @EnvironmentObject private var settings: SettingsStore
+    @StateObject private var edits = CacheEditStore.shared
     @State private var showGuide = false
     @State private var showClear = false
     @State private var showRespringConfirm = false
@@ -23,7 +25,7 @@ struct SettingsView: View {
 
             Section(L("SETTINGS_SECTION_SESSION")) {
                 Button(L("SETTINGS_LOGOUT")) { showRespringConfirm = true }
-                    .disabled(isClearing)
+                    .disabled(isClearing || edits.isWorking)
                 Text(L("SETTINGS_LOGOUT_SUBTITLE")).font(.caption).foregroundStyle(.secondary)
             }
 
@@ -66,7 +68,7 @@ struct SettingsView: View {
 
             Section {
                 Button(L("WALLPAPER_CLEAR_SAVED_DATA"), role: .destructive) { showClear = true }
-                    .disabled(isClearing)
+                    .disabled(isClearing || edits.isWorking)
                 Text(L("SETTINGS_CACHE_CLEAR_FOOTER"))
                     .font(.caption).foregroundStyle(.secondary)
                 if isClearing { ProgressView(L("COMMON_PLEASE_WAIT")) }
@@ -98,13 +100,11 @@ struct SettingsView: View {
     }
 
     private func clearCache() {
-        guard !isClearing else { return }
+        guard !isClearing && !edits.isWorking else { return }
         isClearing = true
         Task {
             do {
-                let count = try await Task.detached(priority: .userInitiated) {
-                    try CacheWriter().clearCacheAndBackups()
-                }.value
+                let count = try await edits.clearCacheAndBackups()
                 message = LF("CACHE_CLEAR_DONE", count)
                 messageIsError = false
             } catch {

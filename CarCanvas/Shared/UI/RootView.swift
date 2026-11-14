@@ -1,21 +1,11 @@
 import SwiftUI
 
-/// Tab order (second revision):
-///   1. Wallpaper list (was "History")
-///   2. New wallpaper (was "Wallpaper")
-///   3. CarPlay
-///   4. Settings
+/// Cache management and settings; photo replacement starts on the cache itself.
 struct RootView: View {
     @EnvironmentObject private var settings: SettingsStore
 
     var body: some View {
         TabView {
-            NavigationStack { HistoryView() }
-                .tabItem { Label(L("ROOT_WALLPAPERS"), systemImage: "photo.stack") }
-
-            NavigationStack { WallpaperView() }
-                .tabItem { Label(L("ROOT_NEW_WALLPAPER"), systemImage: "plus.circle") }
-
             NavigationStack { CarPlayBrowserView() }
                 .tabItem { Label(L("ROOT_CARPLAY"), systemImage: "car.fill") }
 

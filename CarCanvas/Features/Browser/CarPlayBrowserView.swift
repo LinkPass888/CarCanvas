@@ -1,30 +1,57 @@
 import SwiftUI
 import Combine
 import CoreGraphics
+import PhotosUI
 import UIKit
 
-/// Only cache previews and original-backup restore, never a general file browser.
+/// Cache photos are edited in place, but remain app-local until Apply.
 @MainActor
 struct CarPlayBrowserView: View {
     @EnvironmentObject private var history: HistoryStore
+    @EnvironmentObject private var settings: SettingsStore
     @StateObject private var store = CarPlayBrowserStore.shared
-    @State private var restoringFileName: String?
-    @State private var banner: String?
-    @State private var bannerIsError = false
+    @StateObject private var edits = CacheEditStore.shared
+    @State private var pickedItem: PhotosPickerItem?
+    @State private var pickedTarget: WallpaperTarget?
+    @State private var showPhotoPicker = false
+    @State private var showRestoreAllConfirm = false
+    @State private var isRespringing = false
+    @State private var error: String?
+
+    // Keep an orphaned pending edit visible and clearable after a refresh.
+    // Neither refresh nor an absent target silently discards a durable choice.
+    private var groups: [WallpaperGroup] {
+        var targets = store.targets
+        let known = Set(targets.map(\.path))
+        for edit in edits.pending where !known.contains(edit.target.path) { targets.append(edit.target) }
+        return WallpaperGroup.make(from: targets)
+    }
 
     var body: some View {
         List {
+            Section { StatusBanner() }
             Section(L("BROWSER_TITLE")) {
-                if store.isLoading { ProgressView(L("BROWSER_LOADING")) }
-                else if store.groups.isEmpty {
+                if store.isLoading || (!edits.isReady && edits.loadError == nil) { ProgressView(L("BROWSER_LOADING")) }
+                if let loadError = edits.loadError { Text(loadError).font(.caption).foregroundStyle(.red) }
+                if !store.isLoading && groups.isEmpty {
                     Text(L("BROWSER_WALLPAPER_CACHE_EMPTY")).foregroundStyle(.secondary)
-                } else {
-                    ForEach(store.groups) { group in
-                        WallpaperGroupRow(group: group, thumbnails: store.thumbnails)
+                }
+                ForEach(groups) { group in
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(group.displayName).font(.headline)
+                        ForEach(group.targets) { target in
+                            CacheTargetRow(target: target, image: preview(for: target), status: status(for: target),
+                                           canPick: canPick(target), canRestore: canRestore(target),
+                                           canClear: hasPending(target) && edits.isReady && !edits.isWorking,
+                                           onPick: { pick(target) }, onRestore: { restore(target) },
+                                           onClear: { clear(target) })
+                        }
                     }
                 }
+                Text(L("CACHE_EDIT_PICK_HINT")).font(.caption).foregroundStyle(.secondary)
+                if edits.isWorking { ProgressView(L("COMMON_PLEASE_WAIT")) }
             }
-            Section(L("BROWSER_BACKUPS")) {
+            Section {
                 if history.originalBackups.isEmpty {
                     Text(L("HISTORY_BACKUP_EMPTY")).foregroundStyle(.secondary)
                 }
@@ -32,49 +59,142 @@ struct CarPlayBrowserView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(backup.cacheFileName).font(.headline)
                         Text(backup.createdAt.formatted()).font(.caption).foregroundStyle(.secondary)
+                        Text(ByteCountFormatter.string(fromByteCount: Int64(backup.byteCount), countStyle: .file))
+                            .font(.caption).foregroundStyle(.secondary)
                         Text(backupSourceLabel(backup)).font(.caption).foregroundStyle(.secondary)
-                        HStack {
-                            Spacer()
-                            Button { restoreOriginal(backup) } label: {
-                                if restoringFileName == backup.cacheFileName {
-                                    ProgressView().controlSize(.small)
-                                } else { Text(L("WALLPAPER_RESTORE")) }
-                            }
-                            .buttonStyle(.bordered)
-                            .disabled(restoringFileName != nil || history.backupFailures.contains(backup.cacheFileName))
-                        }
                     }
                 }
                 if !history.backupFailures.isEmpty {
                     Text(LF("HISTORY_BACKUP_FAILED", history.backupFailures.joined(separator: ", ")))
                         .font(.caption).foregroundStyle(.red)
                 }
+            } header: {
+                HStack {
+                    Text(L("BROWSER_BACKUPS"))
+                    Spacer()
+                    Button(L("WALLPAPER_RESTORE")) { showRestoreAllConfirm = true }
+                        .buttonStyle(.bordered).controlSize(.small)
+                        .disabled(history.originalBackups.isEmpty || !history.backupFailures.isEmpty
+                                  || edits.isWorking || !edits.isReady || store.isLoading || store.cacheDirectory == nil)
+                }.textCase(nil)
             }
         }
         .navigationTitle(L("ROOT_CARPLAY_WALLPAPER"))
-        .toolbar { Button(L("BROWSER_RETRY")) { Task { await store.load(forceRefresh: true) } } }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                if edits.pending.isEmpty {
+                    Button(L("BROWSER_RETRY")) { Task { await store.load(forceRefresh: true) } }
+                        .disabled(edits.isWorking || store.isLoading || !edits.isReady)
+                } else {
+                    Button { apply() } label: {
+                        Text(L("HISTORY_APPLY"))
+                            .padding(.trailing, 6)
+                            .overlay(alignment: .topTrailing) {
+                                Text("\(edits.pending.count)").font(.caption2.monospacedDigit())
+                                    .padding(.horizontal, 5).padding(.vertical, 2)
+                                    .background(Color.accentColor, in: Capsule()).foregroundStyle(.white)
+                                    .offset(x: 10, y: -10)
+                                    .allowsHitTesting(false)
+                            }
+                    }
+                    .accessibilityLabel(LF("CACHE_APPLY_COUNT", edits.pending.count))
+                    .disabled(edits.isWorking || store.isLoading || !edits.isReady)
+                }
+            }
+        }
         .task { await store.load() }
-        .refreshable { await store.load(forceRefresh: true) }
-        .alert(store.error != nil || bannerIsError ? L("COMMON_ERROR") : L("COMMON_SUCCESS"),
-               isPresented: Binding(get: { store.error != nil || banner != nil }, set: {
-                if !$0 { store.error = nil; banner = nil }
-               })) {
-            Button(L("COMMON_OK")) { store.error = nil; banner = nil }
-        } message: { Text(store.error ?? banner ?? "") }
+        .refreshable { if !edits.isWorking { await store.load(forceRefresh: true) } }
+        .photosPicker(isPresented: $showPhotoPicker, selection: $pickedItem, matching: .images)
+        .onChange(of: pickedItem) { _, item in
+            guard let item, let target = pickedTarget else { return }
+            let order = settings.channelOrder
+            Task {
+                do {
+                    try await edits.stagePhoto(for: target, channelOrder: order) {
+                        guard let data = try await item.loadTransferable(type: Data.self) else { throw CCError.renderFailed }
+                        return data
+                    }
+                } catch { self.error = error.localizedDescription }
+            }
+        }
+        .confirmationDialog(L("CACHE_RESTORE_ALL_TITLE"), isPresented: $showRestoreAllConfirm) {
+            Button(L("WALLPAPER_RESTORE")) { restoreAll() }
+        } message: { Text(L("CACHE_RESTORE_ALL_MESSAGE")) }
+        .fullScreenCover(isPresented: $isRespringing) { NeoSpringOverlay() }
+        .alert(L("COMMON_ERROR"), isPresented: Binding(get: { error != nil || store.error != nil }, set: {
+            if !$0 { error = nil; store.error = nil }
+        })) {
+            Button(L("COMMON_OK")) { error = nil; store.error = nil }
+        } message: { Text(error ?? store.error ?? "") }
     }
 
-    private func restoreOriginal(_ backup: HistoryStore.OriginalBackup) {
-        restoringFileName = backup.cacheFileName
+    private func hasPending(_ target: WallpaperTarget) -> Bool {
+        edits.pending.contains { $0.target.path == target.path }
+    }
+
+    private func preview(for target: WallpaperTarget) -> CGImage? {
+        hasPending(target) ? edits.thumbnails[target.path] : store.thumbnails[target.path]
+    }
+
+    private func status(for target: WallpaperTarget) -> String? {
+        if let edit = edits.pending.first(where: { $0.target.path == target.path }) {
+            return edit.isRestore ? L("CACHE_EDIT_PENDING_RESTORE") : L("CACHE_EDIT_PENDING_REPLACE")
+        }
+        if edits.appliedTargets.contains(where: { $0.path == target.path }) { return L("CACHE_EDIT_APPLIED") }
+        return nil
+    }
+
+    private func canPick(_ target: WallpaperTarget) -> Bool {
+        edits.isReady && !edits.isWorking && !store.isLoading
+            && store.targets.contains(where: { $0.path == target.path })
+            && !history.backupFailures.contains(target.fileName)
+    }
+
+    private func canRestore(_ target: WallpaperTarget) -> Bool {
+        edits.isReady && !edits.isWorking && !store.isLoading && !hasPending(target)
+            && edits.appliedTargets.contains(where: { $0.path == target.path })
+            && history.originalBackups.contains(where: { $0.cacheFileName == target.fileName })
+            && !history.backupFailures.contains(target.fileName)
+    }
+
+    private func pick(_ target: WallpaperTarget) {
+        guard canPick(target) else { return }
+        pickedItem = nil
+        pickedTarget = target
+        showPhotoPicker = true
+    }
+
+    private func restore(_ target: WallpaperTarget) {
+        guard canRestore(target), let backup = history.originalBackups.first(where: { $0.cacheFileName == target.fileName }) else { return }
+        let order = settings.channelOrder
+        Task {
+            do { try await edits.stageRestores([backup], for: target, channelOrder: order) }
+            catch { error = error.localizedDescription }
+        }
+    }
+
+    private func restoreAll() {
+        let backups = history.originalBackups, order = settings.channelOrder
+        Task {
+            do { try await edits.stageRestores(backups, channelOrder: order) }
+            catch { error = error.localizedDescription }
+        }
+    }
+
+    private func clear(_ target: WallpaperTarget) {
+        Task {
+            do { try await edits.clearPending(for: target) }
+            catch { error = error.localizedDescription }
+        }
+    }
+
+    private func apply() {
         Task {
             do {
-                try await Task.detached(priority: .userInitiated) { try CacheWriter().restore(backup: backup) }.value
-                banner = L("WALLPAPER_RESTORED")
-                bannerIsError = false
-            } catch {
-                banner = error.localizedDescription
-                bannerIsError = true
-            }
-            restoringFileName = nil
+                try await edits.applyPending()
+                // Every successful file and its status are on disk already.
+                isRespringing = true
+            } catch { error = error.localizedDescription }
         }
     }
 
@@ -84,6 +204,52 @@ struct CarPlayBrowserView: View {
         case .legacy: return LF("HISTORY_BACKUP_LEGACY", backup.sourceFileName ?? backup.backupFileName)
         case .recovered: return L("HISTORY_BACKUP_RECOVERED")
         }
+    }
+}
+
+/// Fixed-size, left-aligned photo; the remaining width is not an image slot.
+@MainActor
+private struct CacheTargetRow: View {
+    let target: WallpaperTarget
+    let image: CGImage?
+    let status: String?
+    let canPick: Bool
+    let canRestore: Bool
+    let canClear: Bool
+    let onPick: () -> Void
+    let onRestore: () -> Void
+    let onClear: () -> Void
+
+    var body: some View {
+        let previewImage = image
+        VStack(alignment: .leading, spacing: 6) {
+            Text(target.fileName).font(.caption2.monospaced()).textSelection(.enabled)
+            HStack(spacing: 12) {
+                Button(action: onPick) {
+                    Group {
+                        if let previewImage { Image(decorative: previewImage, scale: 1).resizable().scaledToFit() }
+                        else {
+                            VStack(spacing: 4) {
+                                Image(systemName: "photo.badge.exclamationmark")
+                                Text(L("BROWSER_PREVIEW_FAILED")).font(.caption2)
+                            }.foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(width: 144, height: 80, alignment: .leading)
+                    .background(Color(uiColor: .tertiarySystemFill), in: RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain).disabled(!canPick)
+                .accessibilityLabel(LF("CACHE_EDIT_PICK_FILE", target.fileName))
+                Spacer(minLength: 0)
+                VStack(alignment: .trailing, spacing: 6) {
+                    Button(L("WALLPAPER_RESTORE"), action: onRestore).disabled(!canRestore)
+                    Button(L("CACHE_EDIT_CLEAR"), action: onClear).disabled(!canClear)
+                }.buttonStyle(.bordered).font(.footnote)
+            }
+            if let status { Text(status).font(.caption).foregroundStyle(.secondary) }
+            Text(ByteCountFormatter.string(fromByteCount: Int64(target.byteCount), countStyle: .file))
+                .font(.caption2).foregroundStyle(.secondary)
+        }.frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -207,6 +373,7 @@ final class CarPlayBrowserStore: ObservableObject {
                             if let image = service.previewImage(for: target, resolved: resolved) { images[target.path] = image }
                         }
                     }
+                    try CacheEditStore.shared.reconcile(with: resolved)
                     return Snapshot(resolved: resolved, thumbnails: images)
                 }.value
                 if currentRevision == revision {

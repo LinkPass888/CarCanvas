@@ -8,6 +8,7 @@ struct WallpaperTarget: Identifiable, Hashable, Codable {
     let fileName: String
     let appearance: Appearance
     let byteCount: Int
+    var contentDigest: String? = nil
 
     var id: String { path }
 

@@ -17,6 +17,103 @@ final class CacheWriter {
         let current: Data
     }
 
+    /// Restore is staged as metadata + a thumbnail, not as a captured payload.
+    /// Apply must re-read and validate the original inside its own write scope.
+    func prepareRestores(_ backups: [HistoryStore.OriginalBackup],
+                         channelOrder: CPBitmapTemplate.ChannelOrder) throws -> [CacheEditStore.PreparedRestore] {
+        guard !backups.isEmpty, Set(backups.map(\.cacheFileName)).count == backups.count else { throw CCError.backupFailed }
+        let resolved = try ContainerResolver().resolve()
+        return try WQAccess.shared.withAccess(containerPath: resolved.containerPath) {
+            guard try WQWhitelist.cacheDirectoryExists(resolved.cacheDirectory) else { throw CCError.cacheNotFound }
+            let files = try ContainerResolver.cacheFiles(in: resolved.cacheDirectory)
+            let service = WallpaperService(channelOrder: channelOrder)
+            return try backups.map { backup in
+                try autoreleasepool {
+                    let path = resolved.cacheDirectory + "/" + backup.cacheFileName
+                    guard WQWhitelist.isAllowedCacheFile(path, in: resolved.cacheDirectory) else { throw CCError.outsideWhitelist(path) }
+                    _ = try history.backupData(for: backup)
+                    let target = files.first(where: { $0.path == path })
+                        ?? WallpaperTarget(path: path, fileName: backup.cacheFileName,
+                                           appearance: WQWhitelist.appearance(of: backup.cacheFileName), byteCount: 0)
+                    let image = service.previewImage(at: history.backupsDirectory.appendingPathComponent(backup.backupFileName))
+                    return CacheEditStore.PreparedRestore(target: target, backup: backup, thumbnail: image)
+                }
+            }
+        }
+    }
+
+    /// Process only the explicitly staged filenames. Notify once at the end,
+    /// including partial failure, so each member does not restart discovery.
+    func apply(edits: [CacheEditStore.PendingEdit]) throws {
+        guard !edits.isEmpty else { throw CCError.nothingSelected }
+        defer { announceCacheChange() }
+        var succeeded = 0
+        for edit in edits {
+            do {
+                try apply(edit: edit)
+                succeeded += 1
+            } catch {
+                throw failure(LF("CACHE_APPLY_FAILED", succeeded, error.localizedDescription))
+            }
+        }
+    }
+
+    /// Exactly one durable edit, exactly one fixed filename. A missing replace
+    /// target fails; only explicit restore may re-create its backed-up filename.
+    private func apply(edit: CacheEditStore.PendingEdit) throws {
+        let resolved = try ContainerResolver().resolve()
+        let target = edit.target
+        guard target.path == resolved.cacheDirectory + "/" + target.fileName,
+              target.appearance == WQWhitelist.appearance(of: target.fileName),
+              WQWhitelist.isAllowedCacheFile(target.path, in: resolved.cacheDirectory) else {
+            throw failure(L("CACHE_EDIT_TARGET_CHANGED"))
+        }
+        try WQAccess.shared.withAccess(containerPath: resolved.containerPath) {
+            let edits = CacheEditStore.shared
+            try edits.validatePending(edit)
+            guard try WQWhitelist.cacheDirectoryExists(resolved.cacheDirectory) else { throw CCError.cacheNotFound }
+            let files = try ContainerResolver.cacheFiles(in: resolved.cacheDirectory)
+            let currentTarget = files.first(where: { $0.path == target.path && $0.fileName == target.fileName })
+            if let currentTarget, currentTarget.byteCount > 256 * 1024 * 1024 { throw CCError.templateUnreadable(target.fileName) }
+            let payload: Data
+            switch edit.action {
+            case .replace:
+                guard let currentTarget, currentTarget.appearance == target.appearance,
+                      currentTarget.byteCount == target.byteCount else { throw failure(L("CACHE_EDIT_TARGET_CHANGED")) }
+                payload = try edits.replacementData(for: edit)
+                try history.ensureOriginal(for: currentTarget)
+            case .restore(let backup):
+                guard backup.cacheFileName == target.fileName else { throw CCError.backupFailed }
+                payload = try history.backupData(for: backup)
+            }
+            let current = try existingData(at: target.path)
+            if !edit.isRestore && current == nil { throw failure(L("CACHE_EDIT_TARGET_CHANGED")) }
+            var wrote = false
+            do {
+                guard try existingData(at: target.path) == current else { throw failure(L("CACHE_EDIT_TARGET_CHANGED")) }
+                try writeVerified(payload, to: target, rollback: current)
+                wrote = true
+                // Durable status precedes any NeoSpring request. A local index
+                // failure is a failed Apply, not a falsely successful write.
+                try edits.complete(edit, payload: payload)
+            } catch {
+                if wrote {
+                    do {
+                        guard try existingData(at: target.path) == payload else { throw CCError.verificationFailed }
+                        if let current { try writeVerified(current, to: target, rollback: payload) }
+                        else { try FileManager.default.removeItem(atPath: target.path) }
+                    } catch let rollbackError {
+                        CCLog.error("edit checkpoint rollback failed for \(target.fileName): \(rollbackError.localizedDescription)")
+                        throw failure(LF("HISTORY_BACKUP_ROLLBACK_FAILED", error.localizedDescription))
+                    }
+                }
+                throw error
+            }
+        }
+    }
+
+    /// Legacy group exports remain readable but are no longer reachable from
+    /// the UI. Cache-photo edits above never call this paired writer.
     /// A singular group is the entire destination contract. Incomplete groups
     /// write only their existing member, and legacy one-file exports can supply
     /// that member. A corrupt/missing named counterpart is NOT another photo.
@@ -107,6 +204,9 @@ final class CacheWriter {
                 removeTemporary(temporary)
                 if let backupPurge { removeTemporary(backupPurge.temporaryDirectory) }
             }
+            let editStore = CacheEditStore.shared
+            let editSnapshot = try editStore.prepareReset()
+            var resetEdits = false
             // Preparation is read/copy/verify only. A denied scope or unreadable
             // source fails before any system or local original is removed.
             try manager.createDirectory(at: temporary, withIntermediateDirectories: true)
@@ -128,12 +228,22 @@ final class CacheWriter {
                 }
                 guard try ContainerResolver.cacheFiles(in: resolved.cacheDirectory).isEmpty,
                       let prepared = backupPurge else { throw CCError.verificationFailed }
+                try editStore.reset(using: editSnapshot)
+                resetEdits = true
                 try history.purgeOriginalBackups(using: prepared)
+                editStore.finishReset(editSnapshot)
                 // Empty cache is still a successful explicit backup purge.
                 changed = true
                 return removed.count
             } catch {
                 var rollbackFailed = false
+                if resetEdits {
+                    do { try editStore.rollbackReset(editSnapshot) }
+                    catch let rollbackError {
+                        rollbackFailed = true
+                        CCLog.error("cache edit state rollback failed: \(rollbackError.localizedDescription)")
+                    }
+                }
                 for target in removed {
                     do {
                         guard try WQWhitelist.cacheDirectoryExists(resolved.cacheDirectory) else { throw CCError.cacheNotFound }
