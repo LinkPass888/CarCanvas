@@ -56,6 +56,26 @@ final class WallpaperService {
         return entry
     }
 
+    /// Decodes an existing cache file into an image for the preview slots.
+    /// Uses the template header so the geometry matches how the file is laid
+    /// out, and falls back to the system decoder for anything it cannot parse.
+    func previewImage(for target: WallpaperTarget,
+                      resolved: ContainerResolver.Resolved) -> CGImage? {
+        let url = URL(fileURLWithPath: target.path)
+        let data: Data? = try? WQAccess.shared.withAccess(containerPath: resolved.containerPath) {
+            try? Data(contentsOf: url, options: [.mappedIfSafe])
+        }
+        guard let data else { return nil }
+
+        if let template = try? CPBitmapTemplate.parse(data), let image = template.preview() {
+            return image
+        }
+        // Non-CPBitmap or an unrecognised layout: let the system try.
+        return CGImageSourceCreateWithData(data as CFData, nil).flatMap {
+            CGImageSourceCreateImageAtIndex($0, 0, nil)
+        }
+    }
+
     /// System writer first (no template needed), template renderer as fallback.
     private func encode(_ image: CGImage,
                         appearance: WallpaperTarget.Appearance) throws -> Data {

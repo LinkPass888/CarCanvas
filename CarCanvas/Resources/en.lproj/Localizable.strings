@@ -159,3 +159,6 @@
 "SETTINGS_FILZASLOP_TITLE" = "worse_query research";
 "SETTINGS_CHANNEL_TELEGRAM" = "Telegram channel";
 "SETTINGS_CHANNEL_TELEGRAM_SUBTITLE" = "Subscribe for updates";
+"WALLPAPER_SECTION_PREVIEW" = "Wallpaper Preview";
+"WALLPAPER_PREVIEW_DARK" = "Dark preview";
+"WALLPAPER_PREVIEW_LIGHT" = "Light preview";
