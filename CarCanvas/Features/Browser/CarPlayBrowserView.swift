@@ -35,7 +35,11 @@ struct CarPlayBrowserView: View {
         .navigationTitle(L("ROOT_CARPLAY_WALLPAPER"))
         .toolbar { Button(L("BROWSER_RETRY")) { load() } }
         .task { load() }
-        .refreshable { await loadAsync() }
+        .refreshable {
+            let outcome = await loadAsync()
+            targets = outcome.0
+            error = outcome.1
+        }
         .alert(L("COMMON_ERROR"), isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button(L("COMMON_OK")) { error = nil }
         } message: { Text(error ?? "") }
