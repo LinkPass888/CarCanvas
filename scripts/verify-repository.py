@@ -423,6 +423,19 @@ if check(wl.is_file() and wa.is_file(), "backend whitelist + access wrapper exis
               "ContainerManager query not used")
         check("dlsym" in qm, "query symbols resolved at runtime",
               "query symbols not resolved dynamically")
+    sc = ROOT / "CarCanvas" / "Features" / "Backend" / "CCContainerScanner.m"
+    if sc.is_file():
+        sct = sc.read_text(encoding="utf-8")
+        # Reading the metadata plist first made all ~1500 scanned containers
+        # fail to identify, because that file is not readable from the sandbox.
+        xattr_at = sct.find("CCIdentifierFromXattr")
+        plist_at = sct.find("CCIdentifierFromMetadata")
+        check(xattr_at >= 0 and (plist_at < 0 or xattr_at < plist_at),
+              "container identifier is read from xattr before the metadata plist",
+              "metadata plist is read before xattr; every container will fail to identify")
+        check("com.apple.containermanager.identifier" in sct,
+              "xattr identifier key present",
+              "xattr identifier key missing")
     if cr.is_file():
         crt = cr.read_text(encoding="utf-8")
         enum_at = crt.find("CCContainerEnumerate(")

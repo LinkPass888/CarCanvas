@@ -44,7 +44,7 @@ final class ContainerResolver {
     }
 
     /// Wallpaper caches are small; this is only for the fallback path.
-    private let scanBudget: TimeInterval = 5
+    private let scanBudget: TimeInterval = 20
 
     static func invalidateCache() { cache.invalidate() }
 
@@ -193,9 +193,16 @@ final class ContainerResolver {
     private func scanForContainer() -> String? {
         var found: String?
         var candidates = 0
+        var identified = 0
+        var sample: [String] = []
+
         _ = CCScanApplicationContainers(scanBudget) { path in
             candidates += 1
-            guard let identifier = CCContainerIdentifier(path) else { return false }
+            guard let identifier = CCContainerIdentifier(path) else {
+                return false   // could not read this one's identifier
+            }
+            identified += 1
+            if sample.count < 3 { sample.append(identifier) }
             if identifier == WQWhitelist.carPlayWallpaperBundleID,
                WQWhitelist.isAllowedContainer(path, identifier: identifier) {
                 found = path
@@ -203,7 +210,17 @@ final class ContainerResolver {
             }
             return false
         }
-        CCLog.info("scan inspected \(candidates) candidates, found: \(found ?? "none")")
+
+        // The two failure modes are completely different, so log them apart:
+        //  - identified == 0  -> xattr is unreadable, scanning can never work
+        //  - identified > 0   -> xattr works, CarPlayWallpaper just isn't there
+        CCLog.info("scan: \(candidates) candidates, \(identified) identified")
+        if identified == 0 && candidates > 0 {
+            CCLog.error("scan: identifiers unreadable on this build; enumeration/query required")
+        } else if !sample.isEmpty {
+            CCLog.info("scan sample ids: \(sample.joined(separator: ", "))")
+        }
+        CCLog.info("scan result: \(found ?? "none")")
         return found
     }
 

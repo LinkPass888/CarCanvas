@@ -22,15 +22,62 @@ static CCFsGetPathFn CCCopyFsGetPath(void)
     return cached;
 }
 
-/// The ORIGINAL CarCanvas read this plist. It lives inside each container and
-/// is readable without a sandbox extension. Prefer it over xattr, which is not
-/// present on every iOS build (and which the original app never used).
+/// Reads the container's identifier from its extended attribute.
+///
+/// This is the ONLY route that works from inside the sandbox: the metadata
+/// plist is not readable for other apps' containers, so preferring it made
+/// every one of the ~1500 scanned containers fail to identify. WQFiles reads
+/// the xattr for exactly this reason (wq_container_identifier_lookup).
+static NSString *CCIdentifierFromXattr(NSString *path)
+{
+    for (NSString *key in @[@"com.apple.containermanager.identifier",
+                            @"com.apple.containermanager.identity"]) {
+        ssize_t size = getxattr(path.fileSystemRepresentation, key.UTF8String,
+                                NULL, 0, 0, XATTR_NOFOLLOW);
+        if (size <= 0 || size > 65536) continue;
+
+        NSMutableData *data = [NSMutableData dataWithLength:(NSUInteger)size];
+        ssize_t count = getxattr(path.fileSystemRepresentation, key.UTF8String,
+                                 data.mutableBytes, data.length, 0, XATTR_NOFOLLOW);
+        if (count <= 0) continue;
+        data.length = (NSUInteger)count;
+
+        NSString *value = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+        if (value.length == 0) continue;
+
+        NSCharacterSet *ignored = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+        // The identity xattr is a small plist-ish block; the identifier one is
+        // often just the bundle id. Handle both.
+        for (NSString *line in [value componentsSeparatedByString:@"
+"]) {
+            NSString *text = [line stringByTrimmingCharactersInSet:ignored];
+            if ([text hasPrefix:@"identifier:"]) {
+                NSString *identifier = [[text substringFromIndex:11]
+                                        stringByTrimmingCharactersInSet:ignored];
+                if (identifier.length) return identifier;
+            }
+        }
+        NSString *flat = [value stringByTrimmingCharactersInSet:ignored];
+        if (flat.length && ![flat containsString:@":"] && ![flat containsString:@"
+"]) {
+            return flat;
+        }
+    }
+    return nil;
+}
+
+/// Metadata plist, kept only as a fallback for a container we already hold an
+/// extension for. Outside that case it will fail, which is expected.
 static NSString *CCIdentifierFromMetadata(NSString *path)
 {
-    NSString *plistPath = [path stringByAppendingPathComponent:@".com.apple.mobile_container_manager.metadata.plist"];
+    NSString *plistPath = [path stringByAppendingPathComponent:
+                           @".com.apple.mobile_container_manager.metadata.plist"];
     NSData *data = [NSData dataWithContentsOfFile:plistPath];
     if (!data) return nil;
-    id plist = [NSPropertyListSerialization propertyListWithData:data options:0 format:NULL error:NULL];
+    id plist = [NSPropertyListSerialization propertyListWithData:data
+                                                        options:0
+                                                         format:NULL
+                                                          error:NULL];
     if (![plist isKindOfClass:[NSDictionary class]]) return nil;
     NSString *identifier = [(NSDictionary *)plist objectForKey:@"MCMMetadataIdentifier"];
     return [identifier isKindOfClass:[NSString class]] ? identifier : nil;
@@ -39,36 +86,10 @@ static NSString *CCIdentifierFromMetadata(NSString *path)
 NSString *CCContainerIdentifier(NSString *path)
 {
     if (path.length == 0) return nil;
-
-    // 1. The original route: the container metadata plist.
-    NSString *fromPlist = CCIdentifierFromMetadata(path);
-    if (fromPlist.length) return fromPlist;
-
-    // 2. Fallback for builds that expose the identifier on the xattr instead.
-    for (NSString *key in @[@"com.apple.containermanager.identity",
-                            @"com.apple.containermanager.identifier"]) {
-        ssize_t size = getxattr(path.fileSystemRepresentation, key.UTF8String, NULL, 0, 0, XATTR_NOFOLLOW);
-        if (size <= 0 || size > 65536) continue;
-        NSMutableData *data = [NSMutableData dataWithLength:(NSUInteger)size];
-        ssize_t count = getxattr(path.fileSystemRepresentation, key.UTF8String,
-                                 data.mutableBytes, data.length, 0, XATTR_NOFOLLOW);
-        if (count <= 0) continue;
-        data.length = (NSUInteger)count;
-        NSString *value = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-        if (value.length == 0) continue;
-
-        NSCharacterSet *ignored = [NSCharacterSet whitespaceAndNewlineCharacterSet];
-        for (NSString *line in [value componentsSeparatedByString:@"\n"]) {
-            NSString *text = [line stringByTrimmingCharactersInSet:ignored];
-            if ([text hasPrefix:@"identifier:"]) {
-                NSString *identifier = [[text substringFromIndex:11] stringByTrimmingCharactersInSet:ignored];
-                if (identifier.length) return identifier;
-            }
-        }
-        NSString *flat = [value stringByTrimmingCharactersInSet:ignored];
-        if (flat.length && ![flat containsString:@":"] && ![flat containsString:@"\n"]) return flat;
-    }
-    return nil;
+    // xattr first: it is the one thing readable without an extension.
+    NSString *fromXattr = CCIdentifierFromXattr(path);
+    if (fromXattr.length) return fromXattr;
+    return CCIdentifierFromMetadata(path);
 }
 
 NSInteger CCScanApplicationContainers(NSTimeInterval budget, BOOL (^visitor)(NSString *path))
