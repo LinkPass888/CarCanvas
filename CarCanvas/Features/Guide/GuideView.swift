@@ -1,7 +1,5 @@
 import SwiftUI
 
-/// Original layout: a header, the four numbered steps, the wallpaper-picker
-/// screenshot, a footer note and a single dismissal button.
 struct GuideView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var settings: SettingsStore
@@ -21,17 +19,10 @@ struct GuideView: View {
                         .resizable().scaledToFit()
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
-                Section {
-                    Text(L("GUIDE_FOOTER")).font(.caption).foregroundStyle(.secondary)
-                }
+                Section { Text(L("GUIDE_FOOTER")).font(.caption).foregroundStyle(.secondary) }
             }
             .navigationTitle(L("GUIDE_TITLE"))
-            .toolbar {
-                Button(L("GUIDE_DONE")) {
-                    settings.hasSeenGuide = true
-                    dismiss()
-                }
-            }
+            .toolbar { Button(L("GUIDE_DONE")) { settings.hasSeenGuide = true; dismiss() } }
         }
     }
 

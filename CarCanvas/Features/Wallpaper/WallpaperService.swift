@@ -3,15 +3,19 @@ import CoreGraphics
 import ImageIO
 import UniformTypeIdentifiers
 
-/// Creates local CPBitmap files from a chosen image, using an existing device
-/// cache file as the format template. Nothing outside this app's own Documents
-/// directory is written here.
+/// Creates local CPBitmap files from a chosen image.
+///
+/// The system's own CPBitmap writer is used first, which is what the original
+/// app did and which needs no cache file on the device. Only if that writer is
+/// unavailable does it fall back to the template approach. Nothing outside this
+/// app's own Documents directory is written, and nothing is applied to CarPlay
+/// at this stage.
 final class WallpaperService {
     private let history = HistoryStore.shared
     private let settings = SettingsStore.shared
 
-    /// Reads the first available cache file as a template. Uses the scoped
-    /// extension but performs a read only.
+    /// Reads the first available cache file as a template. Requires the
+    /// scoped extension, but performs a read only.
     func loadTemplate() throws -> CPBitmapTemplate {
         let resolved = try ContainerResolver().resolve()
         guard let target = resolved.files.first else { throw CCError.noCacheFiles }
@@ -24,23 +28,26 @@ final class WallpaperService {
         }
     }
 
-    /// Builds Dark + Light CPBitmap files in Documents/Exports.
+    /// Builds Dark + Light CPBitmap files in Documents/Exports and records them
+    /// in History. Does NOT touch CarPlay — see CacheWriter for the explicit
+    /// overwrite.
+    ///
+    /// This deliberately does not require the device to have a CarPlay cache
+    /// yet: the original app let you create local files before CarPlay had ever
+    /// generated one.
     @discardableResult
     func createLocal(imageURL: URL,
                      appearances: Set<WallpaperTarget.Appearance>) throws -> HistoryEntry {
-        let template = try loadTemplate()
         guard let source = CGImageSourceCreateWithURL(imageURL as CFURL, nil),
               let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
             throw CCError.renderFailed
         }
-        let data = try template.render(image: cgImage, order: settings.channelOrder)
-        let baseName = sanitized(settings.exportBaseName)
-        guard !baseName.isEmpty else { throw CCError.renderFailed }
 
         var last: HistoryEntry?
         for appearance in appearances where appearance != .unknown {
+            let data = try encode(cgImage, appearance: appearance)
             last = try history.save(data: data,
-                                    baseName: baseName,
+                                    baseName: sanitized(settings.exportBaseName),
                                     appearance: appearance,
                                     source: .local,
                                     sourceImageName: imageURL.lastPathComponent)
@@ -49,33 +56,34 @@ final class WallpaperService {
         return entry
     }
 
-    /// Copies the cache files that are currently on the device into History,
-    /// so the user has a recoverable copy before overwriting anything.
-    @discardableResult
-    func exportExistingCacheFiles(from targets: [WallpaperTarget],
-                                  baseName: String) throws -> Int {
-        let resolved = try ContainerResolver().resolve()
-        let name = sanitized(baseName)
-        guard !name.isEmpty else { throw CCError.renderFailed }
+    /// System writer first (no template needed), template renderer as fallback.
+    private func encode(_ image: CGImage,
+                        appearance: WallpaperTarget.Appearance) throws -> Data {
+        let baseName = sanitized(settings.exportBaseName)
+        guard !baseName.isEmpty else { throw CCError.renderFailed }
 
-        var count = 0
-        try WQAccess.shared.withAccess(containerPath: resolved.containerPath) {
-            for target in targets {
-                guard WQWhitelist.isAllowedCacheFile(target.path, in: resolved.cacheDirectory),
-                      let data = try? Data(contentsOf: URL(fileURLWithPath: target.path)) else { continue }
-                try history.save(data: data,
-                                 baseName: name,
-                                 appearance: target.appearance,
-                                 source: .carplay)
-                count += 1
+        if CCBitmapWriterIsAvailable() {
+            let suffix = appearance == .dark ? "Dark" : "Light"
+            let tmp = FileManager.default.temporaryDirectory
+                .appendingPathComponent("\(baseName)-\(suffix).cpbitmap")
+            var writeError: NSError?
+            if CCWriteCPBitmap(image, tmp, &writeError),
+               let data = try? Data(contentsOf: tmp) {
+                try? FileManager.default.removeItem(at: tmp)
+                return data
             }
+            try? FileManager.default.removeItem(at: tmp)
+            let why = writeError?.localizedDescription ?? "unknown"
+            CCLog.info("system CPBitmap writer failed (\(why)); using template")
         }
-        return count
+
+        // Fallback: reuse an existing cache file as the format template.
+        let template = try loadTemplate()
+        return try template.render(image: image, order: settings.channelOrder)
     }
 
     private func sanitized(_ raw: String) -> String {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
-        return String(raw.unicodeScalars.filter { allowed.contains($0) })
-            .trimmingCharacters(in: .whitespaces)
+        return String(raw.unicodeScalars.filter { allowed.contains($0) }).trimmingCharacters(in: .whitespaces)
     }
 }

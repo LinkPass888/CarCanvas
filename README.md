@@ -43,9 +43,12 @@ Security boundary: the app only locates and overwrites `.cpbitmap` files that al
 
 ## 4. How CPBitmap is generated
 
-Apple does not publish documentation of the `.cpbitmap` format. Public decoders disagree with each other about the channel order (BGRA / RGBA), row alignment (4 / 8 / 16 pixels) and trailer length (24 / 78 bytes), and no public encoder was found. Public information is insufficient to implement a from-scratch writer with confidence.
+Apple never documented `.cpbitmap`, and public decoders disagree with each other. The generation order is therefore:
 
-This project therefore uses a **template method**: it reads a cache file that already exists on the device as a template, mathematically infers width, height, row alignment and trailer length from `fileSize = width × rowStride × height + trailerLength`, replaces only the pixel region and keeps the trailing metadata byte-for-byte. The output therefore follows the layout used by the current system version. A BGRA / RGBA channel-order switch and a built-in preview are provided so the user can check the result visually. This step must be verified on a real device; this repository makes no claim that real-device testing has been completed.
+1. **The system's own CPBitmap writer first** — resolved dynamically via `writeToCPBitmapFile:flags:`. This is what the original CarCanvas did, and it needs no cache file on the device, so "Create Local CPBitmap" works before CarPlay has ever produced one.
+2. **Template rendering as a fallback** — only when the system writer is unavailable. It reads an existing cache file as a template, derives geometry from `fileSize = width × rowStride × height + trailerLength`, replaces only the pixel region and **keeps the trailer bytes untouched**.
+
+The BGRA / RGBA channel-order switch in Settings applies to the fallback path. Both paths need on-device verification; this repository does not claim a device test was performed.
 
 ## 5. Version requirements
 
