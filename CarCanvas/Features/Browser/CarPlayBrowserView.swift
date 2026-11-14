@@ -18,13 +18,12 @@ struct CarPlayBrowserView: View {
     @State private var isRespringing = false
     @State private var error: String?
 
-    // Keep an orphaned pending edit visible and clearable after a refresh.
-    // Neither refresh nor an absent target silently discards a durable choice.
-    private var groups: [WallpaperGroup] {
+    // Include a staged restore whose exact backed-up filename is absent.
+    private var displayedTargets: [WallpaperTarget] {
         var targets = store.targets
         let known = Set(targets.map(\.path))
         for edit in edits.pending where !known.contains(edit.target.path) { targets.append(edit.target) }
-        return WallpaperGroup.make(from: targets)
+        return targets.sorted { $0.path < $1.path }
     }
 
     var body: some View {
@@ -33,20 +32,15 @@ struct CarPlayBrowserView: View {
             Section(L("BROWSER_TITLE")) {
                 if store.isLoading || (!edits.isReady && edits.loadError == nil) { ProgressView(L("BROWSER_LOADING")) }
                 if let loadError = edits.loadError { Text(loadError).font(.caption).foregroundStyle(.red) }
-                if !store.isLoading && groups.isEmpty {
+                if !store.isLoading && displayedTargets.isEmpty {
                     Text(L("BROWSER_WALLPAPER_CACHE_EMPTY")).foregroundStyle(.secondary)
                 }
-                ForEach(groups) { group in
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text(group.displayName).font(.headline)
-                        ForEach(group.targets) { target in
-                            CacheTargetRow(target: target, image: preview(for: target), status: status(for: target),
-                                           canPick: canPick(target), canRestore: canRestore(target),
-                                           canClear: hasPending(target) && edits.isReady && !edits.isWorking,
-                                           onPick: { pick(target) }, onRestore: { restore(target) },
-                                           onClear: { clear(target) })
-                        }
-                    }
+                ForEach(displayedTargets) { target in
+                    CacheTargetRow(target: target, image: preview(for: target), status: status(for: target),
+                                   canPick: canPick(target), canRestore: canRestore(target),
+                                   canClear: hasPending(target) && edits.isReady && !edits.isWorking,
+                                   onPick: { pick(target) }, onRestore: { restore(target) },
+                                   onClear: { clear(target) })
                 }
                 Text(L("CACHE_EDIT_PICK_HINT")).font(.caption).foregroundStyle(.secondary)
                 if edits.isWorking { ProgressView(L("COMMON_PLEASE_WAIT")) }
