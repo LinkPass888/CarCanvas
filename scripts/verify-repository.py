@@ -195,6 +195,40 @@ if len(tables) == 3:
 
 
 print()
+print("== 2b. Language sanity (catches misplaced translations) ==")
+if len(tables) == 3:
+    KANA = re.compile(r"[぀-ヿ]")          # hiragana + katakana
+    HAN = re.compile(r"[一-鿿]")           # CJK ideographs
+    KANJI_ONLY_JA = re.compile(r"[一-鿿]")
+
+    def script_mix(text):
+        return bool(KANA.search(text)), bool(HAN.search(text))
+
+    problems = []
+    # Japanese copy should contain kana in at least a few entries; Chinese copy
+    # must never contain kana. That single asymmetry catches a swapped pair.
+    ja_kana = sum(1 for v in tables["ja"].values() if KANA.search(v))
+    zh_kana = [k for k, v in tables["zh-Hans"].items() if KANA.search(v)]
+    en_han = [k for k, v in tables["en"].items()
+              if (KANA.search(v) or HAN.search(v)) and "–" not in v]
+    if ja_kana < 5:
+        problems.append("ja copy has almost no kana (%d keys) - languages may be swapped" % ja_kana)
+    if zh_kana:
+        problems.append("zh-Hans contains kana in %d keys" % len(zh_kana))
+    if en_han:
+        problems.append("en contains CJK text in %d keys" % len(en_han))
+
+    # A value identical across ja and zh-Hans is suspicious only when it also
+    # contains CJK; genuine shared values are product names / formats.
+    same = [k for k in keys
+            if tables["ja"][k] == tables["zh-Hans"][k] and HAN.search(tables["ja"][k])]
+    if same:
+        problems.append("%d keys have identical CJK text in ja and zh-Hans" % len(same))
+
+    check(not problems, "each .strings file is in its own language",
+          "; ".join(problems))
+
+print()
 print("== 3. InfoPlist.strings ==")
 for lang in LANGS:
     p = ROOT / "CarCanvas" / "Resources" / (lang + ".lproj") / "InfoPlist.strings"

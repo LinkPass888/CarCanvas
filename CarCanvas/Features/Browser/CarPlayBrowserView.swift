@@ -21,7 +21,7 @@ struct CarPlayBrowserView: View {
                     ForEach(targets) { target in
                         VStack(alignment: .leading, spacing: 3) {
                             Text(target.fileName).font(.footnote.monospaced())
-                            Text("\(appearanceLabel(target.appearance)) · \(target.byteCount) bytes")
+                            Text(LF("BROWSER_ITEM_DETAIL", appearanceLabel(target.appearance), String(target.byteCount)))
                                 .font(.caption2).foregroundStyle(.secondary)
                         }
                     }

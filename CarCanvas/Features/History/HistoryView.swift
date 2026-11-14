@@ -14,7 +14,7 @@ struct HistoryView: View {
                 ForEach(history.entries) { entry in
                     VStack(alignment: .leading, spacing: 6) {
                         Text(entry.baseName).font(.headline)
-                        Text("\(entry.createdAt.formatted()) · \(sourceLabel(entry.source))")
+                        Text(LF("HISTORY_ENTRY_DETAIL", entry.createdAt.formatted(), sourceLabel(entry.source)))
                             .font(.caption).foregroundStyle(.secondary)
                         HStack {
                             if entry.darkFileName != nil { Label(L("WALLPAPER_SET_DARK"), systemImage: "moon") }

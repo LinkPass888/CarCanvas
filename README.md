@@ -29,8 +29,8 @@ The container-access backend is [forcequitOS/worse_query](https://github.com/for
 
 | Item | Status |
 | --- | --- |
-| Upstream compatibility claim | iOS 26.0 – 26.7.2; upstream also mentions 27.2 |
-| Range enabled by this project | iOS 26.0 – 26.7.2 only |
+| Upstream compatibility claim | iOS 26.0 – 26.7.2, plus 27.2 |
+| Range enabled by this project | iOS 26.0 – 26.7.2 and 27.0 – 27.2 (downstream tested up to 27.2.1) |
 | Apple confirmation | None; this is an upstream PoC compatibility claim, not an Apple announcement |
 | CVE identifier | None confirmed |
 | Out-of-range or unrecognized versions | Fail-closed at startup; no container access attempted |
@@ -51,7 +51,7 @@ This project therefore uses a **template method**: it reads a cache file that al
 
 | Item | Requirement |
 | --- | --- |
-| Supported iOS | 26.0 – 26.7.2 |
+| Supported iOS | 26.0 – 26.7.2 and 27.0 – 27.2 |
 | Deployment target | 26.0 |
 | Build toolchain | Xcode 26.x |
 | Older iOS versions | Not supported; the backend was replaced |
@@ -118,7 +118,6 @@ Because this project uses `worse_query` (`GPL-3.0-or-later`), the whole project 
 Credits:
 
 - [forcequitOS / Taj C — worse_query](https://github.com/forcequitOS/worse_query) for the container-access backend.
-- [0xjohnnydev/FilzaSlop](https://github.com/0xjohnnydev/FilzaSlop) for the earlier container-access research.
 - [Dcsyhi/CarCanvas](https://github.com/Dcsyhi1998/CarCanvas) for the original CarCanvas.
 
 The images under `docs/` come from the upstream public repository. That upstream repository has no explicit license, so the rights status of those images must be confirmed by you. This repository contains no upstream closed-source binaries.

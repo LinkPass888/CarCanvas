@@ -64,8 +64,8 @@ final class WQAccess {
         guard WQWhitelist.isAllowedContainer(containerPath, identifier: actual) else {
             throw CCError.outsideWhitelist(containerPath)
         }
-        // iOS 26.x App Group containers need the alternate flag set. This is
-        // the only place where the alt_flags argument is decided.
+        // iOS 26.x App Group containers need the alternate flag set; iOS 27
+        // rejects it. This is the only place alt_flags is decided.
         let is26 = WQCompatibility.current.majorVersion == 26
         let handle = worse_query(containerPath, group, is26, false)
         guard handle >= 0 else { throw CCError.accessFailed(handle) }

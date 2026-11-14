@@ -30,17 +30,17 @@ struct WallpaperView: View {
                 .disabled(pickerItem == nil || isWorking || (!createDark && !createLight))
             }
 
-            Section("CPBitmap preview") {
+            Section(L("WALLPAPER_SECTION_PREVIEW")) {
                 if let preview {
                     Image(decorative: preview, scale: 1)
                         .resizable().scaledToFit()
                         .frame(maxHeight: 180)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                 } else {
-                    Text("Load a cache template to preview channel order and geometry.")
+                    Text(L("WALLPAPER_PREVIEW_EMPTY"))
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                Button("Refresh preview") { loadPreview() }
+                Button(L("WALLPAPER_PREVIEW_REFRESH")) { loadPreview() }
             }
 
             Section(L("WALLPAPER_EXPORT_FILENAME")) {

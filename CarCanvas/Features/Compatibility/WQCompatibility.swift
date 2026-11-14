@@ -2,14 +2,24 @@ import Foundation
 
 /// Version gate for the worse_query backend.
 ///
-/// The upstream PoC (forcequitOS/worse_query) *claims* iOS 26.0 – 26.7.2.
-/// This is an author statement, not an Apple advisory, and no CVE is
-/// assigned to it. We therefore enable exactly that claimed range and
-/// fail closed on anything else — including 27.x, which upstream also
-/// mentions but which this project deliberately does not enable.
+/// The upstream PoC (forcequitOS/worse_query) states support for
+/// "iOS 26.0 - 26.7.2 / 27.2". Downstream projects report a slightly wider
+/// iOS 27 range in practice (WQFiles: tested on 27.0.1, 27.2.1 and a 27.3
+/// beta; Regitela: 27.0 - 27.2), so this project enables the two ranges that
+/// are actually backed by reports:
+///
+///   * 26.0  – 26.7.2   (contiguous)
+///   * 27.0  – 27.2.x   (contiguous)
+///
+/// These are author/downstream claims, not an Apple advisory, and no CVE is
+/// assigned. Anything outside them fails closed.
 enum WQCompatibility {
-    static let minimum = OperatingSystemVersion(majorVersion: 26, minorVersion: 0, patchVersion: 0)
-    static let maximum = OperatingSystemVersion(majorVersion: 26, minorVersion: 7, patchVersion: 2)
+    private static let supported: [ClosedRange<OperatingSystemVersion>] = [
+        OperatingSystemVersion(majorVersion: 26, minorVersion: 0, patchVersion: 0)
+            ... OperatingSystemVersion(majorVersion: 26, minorVersion: 7, patchVersion: 2),
+        OperatingSystemVersion(majorVersion: 27, minorVersion: 0, patchVersion: 0)
+            ... OperatingSystemVersion(majorVersion: 27, minorVersion: 2, patchVersion: 99)
+    ]
 
     static var current: OperatingSystemVersion { ProcessInfo.processInfo.operatingSystemVersion }
 
@@ -18,7 +28,6 @@ enum WQCompatibility {
         return "\(v.majorVersion).\(v.minorVersion).\(v.patchVersion)"
     }
 
-    /// Lexicographic comparison on (major, minor, patch).
     private static func compare(_ a: OperatingSystemVersion, _ b: OperatingSystemVersion) -> ComparisonResult {
         for (x, y) in [(a.majorVersion, b.majorVersion),
                        (a.minorVersion, b.minorVersion),
@@ -31,12 +40,14 @@ enum WQCompatibility {
 
     static var isSupported: Bool {
         let v = current
-        return compare(v, minimum) != .orderedAscending
-            && compare(v, maximum) != .orderedDescending
+        return supported.contains { range in
+            compare(v, range.lowerBound) != .orderedAscending
+                && compare(v, range.upperBound) != .orderedDescending
+        }
     }
 
     static var supportSummary: String {
-        "iOS 26.0 – 26.7.2 (upstream claim; current: \(versionString))"
+        "iOS 26.0–26.7.2, 27.0–27.2 (upstream claim; current: \(versionString))"
     }
 
     /// Called before any container access. Throws rather than returning a

@@ -29,8 +29,8 @@ CarCanvas 是一个覆盖 CarPlay 壁纸缓存的工具。CarPlay 启动时不�
 
 | 项目 | 状态 |
 | --- | --- |
-| 上游声称的兼容范围 | iOS 26.0 – 26.7.2；另有 27.2 的说法 |
-| 本项目启用的范围 | 仅 iOS 26.0 – 26.7.2 |
+| 上游声称的兼容范围 | iOS 26.0 – 26.7.2，以及 27.2 |
+| 本项目启用的范围 | iOS 26.0 – 26.7.2，以及 27.0 – 27.2（下游实测到 27.2.1） |
 | Apple 官方确认 | 无；这是上游 PoC 的兼容性声明，不是 Apple 官方公告 |
 | CVE 编号 | 没有确认的 CVE 编号 |
 | 超出范围或未识别的版本 | 启动时失败关闭（fail-closed），不尝试访问容器 |
@@ -51,7 +51,7 @@ Apple 没有公开 `.cpbitmap` 格式文档。公开解码器在通道顺序（B
 
 | 项目 | 要求 |
 | --- | --- |
-| 支持的 iOS | 26.0 – 26.7.2 |
+| 支持的 iOS | 26.0 – 26.7.2，27.0 – 27.2 |
 | 部署目标 | 26.0 |
 | 构建工具链 | Xcode 26.x |
 | 旧版 iOS | 不再支持，因为后端换了 |
@@ -119,7 +119,6 @@ python3 scripts/verify-repository.py
 致谢：
 
 - [forcequitOS / Taj C — worse_query](https://github.com/forcequitOS/worse_query)：容器访问后端。
-- [0xjohnnydev/FilzaSlop](https://github.com/0xjohnnydev/FilzaSlop)：更早的容器访问研究。
 - [Dcsyhi/CarCanvas](https://github.com/Dcsyhi1998/CarCanvas)：原始 CarCanvas。
 
 `docs/` 下的图片来自上游公开仓库，上游仓库没有显式许可证，权利状态需自行确认；本仓库不含上游闭源二进制。

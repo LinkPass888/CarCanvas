@@ -25,7 +25,7 @@ struct ExportDestinationSheet: View {
                     Toggle(L("WALLPAPER_SET_LIGHT"), isOn: $light)
                 }
                 Section {
-                    Toggle("I confirm overwriting the selected CarPlay cache files on MY OWN device", isOn: $confirmed)
+                    Toggle(L("EXPORT_CONFIRM_TOGGLE"), isOn: $confirmed)
                         .font(.footnote)
                     Button(L("HISTORY_EXPORT_CARPLAY_WRITE")) { perform() }
                         .disabled(!confirmed || (!dark && !light) || result != nil)
