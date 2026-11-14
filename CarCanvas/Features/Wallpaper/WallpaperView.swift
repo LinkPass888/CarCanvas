@@ -20,16 +20,18 @@ struct WallpaperView: View {
     @State private var previewRevision = 0
 
     var body: some View {
+        let darkPreview = preview.darkImage
+        let lightPreview = preview.lightImage
         Form {
             Section {
                 HStack(spacing: 12) {
                     PhotosPicker(selection: $darkPickerItem, matching: .images) {
-                        CPBitmapPreviewView(title: L("WALLPAPER_PREVIEW_DARK"), image: preview.darkImage)
+                        CPBitmapPreviewView(title: L("WALLPAPER_PREVIEW_DARK"), image: darkPreview)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(L("WALLPAPER_PICK_DARK"))
                     PhotosPicker(selection: $lightPickerItem, matching: .images) {
-                        CPBitmapPreviewView(title: L("WALLPAPER_PREVIEW_LIGHT"), image: preview.lightImage)
+                        CPBitmapPreviewView(title: L("WALLPAPER_PREVIEW_LIGHT"), image: lightPreview)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(L("WALLPAPER_PICK_LIGHT"))
