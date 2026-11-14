@@ -24,25 +24,30 @@ final class WQAccess {
     /// Every group listed in the signature, for the diagnostics panel.
     var entitledGroups: [String] { CCAppGroupEntitledIdentifiers() }
 
-    /// Fails closed on unsupported OS versions and a missing App Group before
-    /// touching any ContainerManager symbol.
+    /// Fails closed on unsupported OS versions before touching any
+    /// ContainerManager symbol.
     func preflight() throws {
         try WQCompatibility.requireSupported()
+    }
+
+    /// Worse_query needs an App Group because it swaps that group's Caches
+    /// directory. The direct ContainerManager query does not, so the group is
+    /// only required on the path that actually calls worse_query.
+    func requireAppGroup() throws -> String {
+        try preflight()
         guard let group = appGroupIdentifier,
               FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group) != nil else {
             throw CCError.appGroupUnavailable(entitledGroups.isEmpty
                                               ? "no com.apple.security.application-groups entitlement"
                                               : entitledGroups.joined(separator: ", "))
         }
+        return group
     }
 
     /// Scoped read of the single allowed CarPlay preference file. No directory
     /// is ever granted, so this cannot be widened into a general file read.
     func withCarPlayPreferences<T>(_ body: (Data) throws -> T) throws -> T {
-        try preflight()
-        guard let group = appGroupIdentifier else {
-            throw CCError.appGroupUnavailable("no com.apple.security.application-groups entitlement")
-        }
+        let group = try requireAppGroup()
         let path = WQWhitelist.carPlayPreferencesPath
         guard WQWhitelist.isAllowedCarPlayPreferences(path) else {
             throw CCError.outsideWhitelist(path)
@@ -62,6 +67,19 @@ final class WQAccess {
         return try body(data)
     }
 
+    private var retainedHandle: Int64 = -1
+
+    /// Keeps a container extension alive for the process lifetime. Used for the
+    /// handle ContainerManager already handed us, so we do not immediately ask
+    /// for a second extension for the same container.
+    func retainContainerHandle(_ handle: Int64) {
+        guard handle >= 0, retainedHandle < 0 else {
+            if handle >= 0 { worse_query_release(handle) }
+            return
+        }
+        retainedHandle = handle
+    }
+
     /// Consumes a sandbox extension for a container that the scanner has
     /// already identified as `com.apple.CarPlayWallpaper`.
     ///
@@ -70,9 +88,7 @@ final class WQAccess {
     /// enumeration, so re-reading it at this point would always fail and reject
     /// a perfectly valid container. The path whitelist is still enforced.
     private func consume(containerPath: String) throws -> Int64 {
-        guard let group = appGroupIdentifier else {
-            throw CCError.appGroupUnavailable("no com.apple.security.application-groups entitlement")
-        }
+        let group = try requireAppGroup()
         guard WQWhitelist.isAllowedContainer(containerPath,
                                              identifier: WQWhitelist.carPlayWallpaperBundleID) else {
             throw CCError.outsideWhitelist(containerPath)

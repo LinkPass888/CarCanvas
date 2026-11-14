@@ -16,6 +16,7 @@ struct WallpaperView: View {
     @State private var createLight = true
     @State private var message: String?
     @State private var isWorking = false
+    @State private var hasLoadedOnce = false
 
     var body: some View {
         Form {
@@ -72,7 +73,15 @@ struct WallpaperView: View {
             Button(L("COMMON_OK")) { message = nil }
         } message: { Text(message ?? "") }
         .overlay { if isWorking { ProgressView(L("COMMON_PLEASE_WAIT")) } }
-        .task { refresh() }
+        // Load once per launch. `.task` fires again every time the tab is
+        // re-selected, which used to wipe the loaded previews and re-run the
+        // whole container lookup.
+        .task {
+            guard !hasLoadedOnce else { return }
+            hasLoadedOnce = true
+            refresh()
+        }
+        .refreshable { refresh(forceRefresh: true) }
         .onChange(of: pickerItem) { _, _ in loadPickedImage() }
     }
 
@@ -92,7 +101,8 @@ struct WallpaperView: View {
         return L("WALLPAPER_NO_DEVICES")
     }
 
-    private func refresh() {
+    private func refresh(forceRefresh: Bool = false) {
+        if forceRefresh { ContainerResolver.invalidateCache() }
         preview.beginSearching()
         Task {
             // Heavy container work off the main actor, then publish on main.

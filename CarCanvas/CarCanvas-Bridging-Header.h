@@ -5,6 +5,7 @@
 
 #include "CCAppGroup.h"
 #include "CCBitmapWriter.h"
+#include "CCContainerQuery.h"
 #include "CCContainerScanner.h"
 #include "worse_query.h"
 #include "pathleak.h"

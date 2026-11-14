@@ -400,6 +400,27 @@ if check(wl.is_file() and wa.is_file(), "backend whitelist + access wrapper exis
     check("CCAppGroupResetCachesDirectory" not in wa_text,
           "no external Caches reset (worse_query cleans up itself)",
           "external Caches reset can tear down worse_query's own swap")
+    # The direct ContainerManager query must stay the primary route: the inode
+    # fallback can take most of an hour on iOS 26 and must never come first.
+    q_h = ROOT / "CarCanvas" / "Features" / "Backend" / "CCContainerQuery.h"
+    q_m = ROOT / "CarCanvas" / "Features" / "Backend" / "CCContainerQuery.m"
+    cr = ROOT / "CarCanvas" / "Features" / "Backend" / "ContainerResolver.swift"
+    if check(q_h.is_file() and q_m.is_file(), "container query implementation present",
+             "CCContainerQuery.h/.m missing"):
+        qm = q_m.read_text(encoding="utf-8")
+        check("container_query_set_identifiers" in qm and
+              "container_object_sandbox_extension_activate" in qm,
+              "uses ContainerManager identifier query + extension activate",
+              "ContainerManager query not used")
+        check("dlsym" in qm, "query symbols resolved at runtime",
+              "query symbols not resolved dynamically")
+    if cr.is_file():
+        crt = cr.read_text(encoding="utf-8")
+        query_at = crt.find("CCContainerLookup(")
+        scan_at = crt.find("scanForContainer()")
+        check(query_at >= 0 and scan_at > query_at,
+              "direct query is tried before the inode fallback",
+              "inode fallback runs before the direct query")
 
 swift_files = [p for p in iter_repo_files() if p.suffix == ".swift"]
 ui_files = [p for p in swift_files if "/Features/" in rel(p) or "/UI/" in rel(p)]
