@@ -331,6 +331,15 @@ if check(wf.is_file() and bld.is_file(), "workflow + build script exist",
         check(needle in hay, "%s present" % token, "%s missing" % token)
     check("verify-repository.py" in wf_text,
           "verify job runs before build", "workflow missing verification step")
+    # Node 20 is deprecated on GitHub-hosted runners; pin actions that have
+    # moved past it so the workflow does not silently fall back.
+    for action, major in (("actions/checkout", "v7"),
+                          ("actions/upload-artifact", "v7"),
+                          ("actions/download-artifact", "v8")):
+        needle = action + "@" + major
+        check(needle in wf_text,
+              "%s pinned to %s (Node 20 retirement)" % (action, major),
+              "%s not pinned to %s" % (action, major))
 
 
 print()
