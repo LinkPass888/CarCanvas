@@ -77,19 +77,23 @@ struct CPBitmapTemplate {
         var pixels = [UInt8](repeating: 0, count: pixelRegionLength)
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
-        guard let ctx = CGContext(data: &pixels,
-                                  width: alignedWidth,
-                                  height: height,
-                                  bitsPerComponent: 8,
-                                  bytesPerRow: bytesPerRow,
-                                  space: colorSpace,
-                                  bitmapInfo: bitmapInfo.rawValue) else {
-            throw CCError.renderFailed
+
+        let drew: Bool = pixels.withUnsafeMutableBytes { raw in
+            guard let ctx = CGContext(data: raw.baseAddress,
+                                      width: alignedWidth,
+                                      height: height,
+                                      bitsPerComponent: 8,
+                                      bytesPerRow: bytesPerRow,
+                                      space: colorSpace,
+                                      bitmapInfo: bitmapInfo.rawValue) else {
+                return false
+            }
+            ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
         }
-        ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        guard drew else { throw CCError.renderFailed }
 
         if order == .bgra {
-            // Public decoders disagree; BGRA swaps R and B in place.
             for i in stride(from: 0, to: pixelRegionLength, by: 4) {
                 let r = pixels[i]
                 pixels[i] = pixels[i + 2]

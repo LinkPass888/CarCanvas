@@ -39,7 +39,7 @@ CarCanvas 是一个覆盖 CarPlay 壁纸缓存的工具。CarPlay 启动时不�
 
 这**不再是内核漏洞**、**不是越狱**、不提供 root、不注入其他进程、不联网、不上传数据。
 
-安全边界：只定位并覆盖设备上**已经存在**的 `com.apple.CarPlayWallpaper` 缓存目录里的 `.cpbitmap` 文件；不提供任意路径输入、不提供通用文件管理器、不读取其他 App 数据。写入前自动备份到 App 的 Documents；覆盖后校验文件大小；每个覆盖目标都需要用户显式逐项确认；备份使操作可回滚。关于相关系统行为的公开资料不足，**需真机验证**。
+安全边界：只定位并覆盖设备上**已经存在**的 `com.apple.CarPlayWallpaper` 缓存目录里的 `.cpbitmap` 文件；不提供任意路径输入、不提供通用文件管理器；为定位 CarPlayWallpaper 容器，会枚举应用数据容器的一级目录并读取各容器的 `.com.apple.mobile_container_manager.metadata.plist`，但不读取这些 App 的文档内容。写入前自动备份到 App 的 Documents；覆盖后校验文件大小；用户必须在明确列出所选深色/浅色目标的确认对话框中确认覆盖；备份使操作可回滚。关于相关系统行为的公开资料不足，**需真机验证**。
 
 ## 4. CPBitmap 怎么生成
 
@@ -88,6 +88,11 @@ CI 通过 `.github/workflows/build-ipa.yml` 自动跑同样的工具链。`scrip
 ```sh
 python3 scripts/verify-repository.py
 ```
+
+
+> **注意：** 直接执行 `xcodegen generate` 并在 Xcode 里运行时不会注入 `.lproj` 资源，界面上的 `L(...)` 键名会原样显示。需要完整本地化时请使用 `scripts/build-unsigned-ipa.sh` 或 CI 工作流。
+
+
 
 ## 8. 使用步骤（4 步）
 

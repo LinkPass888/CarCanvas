@@ -32,7 +32,19 @@ final class WQAccess {
     /// Validates a container candidate then consume a sandbox extension for it.
     /// `identifier` must come from the container's metadata plist.
     private func consume(containerPath: String, identifier: String) throws -> Int64 {
-        guard WQWhitelist.isAllowedContainer(containerPath, identifier: identifier) else {
+        // The identifier argument is only a hint. Re-read the container's own
+        // metadata plist and compare, so a caller cannot bypass validation by
+        // passing the expected constant for an unrelated container.
+        let metadata = (containerPath as NSString)
+            .appendingPathComponent(".com.apple.mobile_container_manager.metadata.plist")
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: metadata)),
+              let plist = try? PropertyListSerialization.propertyList(from: data, format: nil),
+              let dict = plist as? [String: Any],
+              let actual = dict["MCMMetadataIdentifier"] as? String,
+              actual == identifier else {
+            throw CCError.outsideWhitelist(containerPath)
+        }
+        guard WQWhitelist.isAllowedContainer(containerPath, identifier: actual) else {
             throw CCError.outsideWhitelist(containerPath)
         }
         // iOS 26.x App Group containers need the alternate flag set. This is

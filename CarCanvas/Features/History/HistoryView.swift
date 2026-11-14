@@ -47,7 +47,7 @@ struct HistoryView: View {
         .sheet(item: $exportEntry) { entry in
             ExportDestinationSheet(entry: entry) { summary in banner = summary }
         }
-        .alert(L("COMMON_ERROR"), isPresented: .constant(banner != nil)) {
+        .alert(L("COMMON_ERROR"), isPresented: Binding(get: { banner != nil }, set: { if !$0 { banner = nil } })) {
             Button(L("COMMON_OK")) { banner = nil }
         } message: { Text(banner ?? "") }
     }

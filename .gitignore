@@ -5,7 +5,7 @@
 *.xcuserstate
 xcuserdata/
 DerivedData/
-build/
+build/*
 !build/README.md
 *.xcarchive
 *.ipa

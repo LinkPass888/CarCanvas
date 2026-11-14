@@ -39,7 +39,7 @@ The app performs a version gate at startup. Any system version outside the enabl
 
 This is **not** a kernel exploit, **not** a jailbreak, provides no root, does not inject into other processes, does not use the network and uploads no data.
 
-Security boundary: the app only locates and overwrites `.cpbitmap` files that already exist in the `com.apple.CarPlayWallpaper` cache directory on the device. It offers no arbitrary path input, provides no general-purpose file manager and does not read other apps' data. Before writing it automatically backs the target files up into the app's Documents directory; after overwriting it verifies the file size; every overwrite target requires an explicit, per-item confirmation; the backup makes the operation rollback-able. Public information about the affected system behaviour is insufficient, and on-device verification is required.
+Security boundary: the app only locates and overwrites `.cpbitmap` files that already exist in the `com.apple.CarPlayWallpaper` cache directory on the device. It offers no arbitrary path input and no general-purpose file manager. To locate the CarPlayWallpaper container it enumerates first-level application data container directories and reads each container's `.com.apple.mobile_container_manager.metadata.plist`; it does not read those apps' document contents. Before writing it automatically backs the target files up into the app's Documents directory; after overwriting it verifies the file size; the user must confirm the overwrite in an explicit dialog that lists the selected Dark/Light destinations; the backup makes the operation rollback-able. Public information about the affected system behaviour is insufficient, and on-device verification is required.
 
 ## 4. How CPBitmap is generated
 
@@ -75,6 +75,7 @@ CarCanvas/Info.plist             ->  CCAppGroupIdentifier                 = grou
 
 ## 7. Building
 
+
 Locally:
 
 ```sh
@@ -88,6 +89,9 @@ CI runs the same toolchain automatically through `.github/workflows/build-ipa.ym
 ```sh
 python3 scripts/verify-repository.py
 ```
+
+
+> **Note:** Running `xcodegen generate` and pressing Run in Xcode builds the app but does **not** inject the `.lproj` bundles; all `L(...)` keys appear literally. Use `scripts/build-unsigned-ipa.sh` (or CI) for a localized build.
 
 ## 8. Usage (4 steps)
 

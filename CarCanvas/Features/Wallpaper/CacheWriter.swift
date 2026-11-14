@@ -22,6 +22,9 @@ final class CacheWriter {
                    dark: Bool,
                    light: Bool) throws -> Result {
         guard dark || light else { throw CCError.nothingSelected }
+        guard SettingsStore.shared.requireExplicitConfirmation else {
+            throw CCError.nothingSelected
+        }
 
         let resolved = try ContainerResolver().resolve()
         let selected = targets.filter { t in
@@ -30,15 +33,18 @@ final class CacheWriter {
         }
         guard !selected.isEmpty else { throw CCError.noCacheFiles }
 
-        let localData: Data? = dark ? data(for: entry.darkFileName) : data(for: entry.lightFileName)
-        // If only one appearance was exported, reuse it for both destinations.
-        let fallback = localData ?? data(for: entry.darkFileName) ?? data(for: entry.lightFileName)
-        guard let payload = fallback else { throw CCError.templateUnreadable(entry.baseName) }
+        let darkData = data(for: entry.darkFileName)
+        let lightData = data(for: entry.lightFileName)
+        let fallback = darkData ?? lightData
+        guard fallback != nil else { throw CCError.templateUnreadable(entry.baseName) }
 
         return try WQAccess.shared.withAccess(containerPath: resolved.containerPath,
                                               identifier: WQWhitelist.carPlayWallpaperBundleID) {
             var ok = 0, failed = 0
             for target in selected {
+                // Prefer the matching appearance; fall back to the single
+                // exported file only when no counterpart exists.
+                let payload = (target.isDark ? (darkData ?? fallback) : (lightData ?? fallback))!
                 do {
                     try writeOne(payload, to: target)
                     ok += 1

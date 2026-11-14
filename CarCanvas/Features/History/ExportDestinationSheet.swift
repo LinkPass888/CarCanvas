@@ -37,7 +37,7 @@ struct ExportDestinationSheet: View {
             .navigationTitle(L("HISTORY_EXPORT_CARPLAY"))
             .toolbar { Button(L("COMMON_CANCEL")) { dismiss() } }
             .task { loadTargets() }
-            .alert(L("COMMON_ERROR"), isPresented: .constant(error != nil)) {
+            .alert(L("COMMON_ERROR"), isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
                 Button(L("COMMON_OK")) { error = nil }
             } message: { Text(error ?? "") }
         }

@@ -10,6 +10,7 @@ struct WallpaperView: View {
     @State private var createLight = true
     @State private var message: String?
     @State private var isWorking = false
+    @State private var preview: CGImage?
 
     var body: some View {
         Form {
@@ -29,6 +30,19 @@ struct WallpaperView: View {
                 .disabled(pickerItem == nil || isWorking || (!createDark && !createLight))
             }
 
+            Section("CPBitmap preview") {
+                if let preview {
+                    Image(decorative: preview, scale: 1)
+                        .resizable().scaledToFit()
+                        .frame(maxHeight: 180)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                } else {
+                    Text("Load a cache template to preview channel order and geometry.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Button("Refresh preview") { loadPreview() }
+            }
+
             Section(L("WALLPAPER_EXPORT_FILENAME")) {
                 TextField(L("WALLPAPER_EXPORT_FILENAME_TITLE"), text: $settings.exportBaseName)
                 Text(L("WALLPAPER_EXPORT_FILENAME_FOOTER"))
@@ -41,7 +55,7 @@ struct WallpaperView: View {
             }
         }
         .navigationTitle(L("WALLPAPER_TITLE"))
-        .alert(L("COMMON_ERROR"), isPresented: .constant(message != nil)) {
+        .alert(L("COMMON_ERROR"), isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button(L("COMMON_OK")) { message = nil }
         } message: { Text(message ?? "") }
         .overlay { if isWorking { ProgressView(L("COMMON_PLEASE_WAIT")) } }
@@ -74,6 +88,13 @@ struct WallpaperView: View {
                 message = resultMessage
                 isWorking = false
             }
+        }
+    }
+
+    private func loadPreview() {
+        Task.detached(priority: .userInitiated) {
+            let image = try? WallpaperService().loadTemplate().preview()
+            await MainActor.run { preview = image }
         }
     }
 }

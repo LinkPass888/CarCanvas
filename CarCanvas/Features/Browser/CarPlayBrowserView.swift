@@ -35,21 +35,32 @@ struct CarPlayBrowserView: View {
         .navigationTitle(L("ROOT_CARPLAY_WALLPAPER"))
         .toolbar { Button(L("BROWSER_RETRY")) { load() } }
         .task { load() }
-        .refreshable { load() }
-        .alert(L("COMMON_ERROR"), isPresented: .constant(error != nil)) {
+        .refreshable { await loadAsync() }
+        .alert(L("COMMON_ERROR"), isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button(L("COMMON_OK")) { error = nil }
         } message: { Text(error ?? "") }
     }
 
     private func load() {
         isLoading = true
-        defer { isLoading = false }
+        Task.detached(priority: .userInitiated) {
+            let outcome: (files: [WallpaperTarget], message: String?) = await loadAsync()
+            await MainActor.run {
+                targets = outcome.files
+                error = outcome.message
+                isLoading = false
+            }
+        }
+    }
+
+    private func loadAsync() async -> ([WallpaperTarget], String?) {
         do {
-            targets = try ContainerResolver().resolve().files
-            error = nil
+            let files = try await Task.detached(priority: .userInitiated) {
+                try ContainerResolver().resolve().files
+            }.value
+            return (files, nil)
         } catch {
-            targets = []
-            self.error = error.localizedDescription
+            return ([], error.localizedDescription)
         }
     }
 

@@ -25,11 +25,13 @@
 
 #import <Foundation/Foundation.h>
 #include <sys/mount.h>
+#include <dlfcn.h>
 
 // The upstream project included the private <sys/fsgetpath.h>. The public SDK
-// does not ship it, so declare the symbol explicitly. fsid_t comes from the
-// public <sys/mount.h> above.
-extern ssize_t fsgetpath(char *buffer, size_t buflen, fsid_t *fsid, uint64_t inode);
+// does not ship the header and may not export the symbol from libSystem's
+// stub, so resolve it at runtime like the other SPIs in worse_query.m.
+// fsid_t comes from the public <sys/mount.h> above.
+typedef ssize_t (*fsgetpath_fn)(char *, size_t, fsid_t *, uint64_t);
 
 // This is just a rewrite of bad_query_list to return an NSString array and run faster
 // The way this works is literally just brute-forcing inodes and doing fsgetpath until it gets a matching path, lol.
@@ -55,6 +57,9 @@ NSArray<NSString *> *pathleak(NSString *path, uint64_t max_inode) {
     size_t prefix_length = strlen(prefix);
     if (prefix_length == 1 && prefix[0] == '/') prefix_length = 0;
     
+    fsgetpath_fn fsgetpath = (fsgetpath_fn)dlsym(RTLD_DEFAULT, "fsgetpath");
+    if (!fsgetpath) return nil;
+
     NSFileManager *files = [NSFileManager defaultManager];
     NSMutableArray<NSString *> *result = [NSMutableArray array];
     char buffer[PATH_MAX];

@@ -48,11 +48,48 @@ def iter_repo_files():
 
 
 print("== 1. No signed/binary release artifacts in repository ==")
+import subprocess
+
 forbidden = (".ipa", ".mobileprovision", ".p12", ".p12.enc")
+
+
+def zip_is_ipa(path):
+    """Sniff a zip whose first entry is Payload/; renamed .ipa files still fail."""
+    try:
+        with path.open("rb") as fh:
+            if fh.read(4) != b"PK":
+                return False
+        import zipfile
+        with zipfile.ZipFile(path) as zf:
+            names = zf.namelist()
+            return bool(names) and (names[0] == "Payload/" or names[0].startswith("Payload/"))
+    except Exception:
+        return False
+
+
 found = [rel(p) for p in iter_repo_files()
-         if any(p.name.lower().endswith(suf) for suf in forbidden)]
-check(not found, "no .ipa / profile / certificate files committed",
-      "forbidden artifacts present: " + ", ".join(found))
+         if any(p.name.lower().endswith(suf) for suf in forbidden) or zip_is_ipa(p)]
+check(not found, "no .ipa / profile / certificate files in working tree",
+      "forbidden working-tree artifacts: " + ", ".join(found))
+
+# Also inspect git HEAD and the index, not just the working tree. A deleted
+# file can still be tracked (the classic `git rm --cached` trap).
+tracked = []
+try:
+    out = subprocess.run(["git", "-C", str(ROOT), "ls-tree", "-r", "--name-only", "HEAD"],
+                         capture_output=True, text=True, check=True).stdout
+    tracked += [n.strip() for n in out.splitlines() if n.strip()]
+except Exception:
+    pass
+try:
+    out = subprocess.run(["git", "-C", str(ROOT), "ls-files"],
+                         capture_output=True, text=True, check=True).stdout
+    tracked += [n.strip() for n in out.splitlines() if n.strip()]
+except Exception:
+    pass
+bad_tracked = sorted({n for n in tracked if any(n.lower().endswith(suf) for suf in forbidden)})
+check(not bad_tracked, "no .ipa / profile / certificate tracked in HEAD or index",
+      "tracked forbidden artifacts: " + ", ".join(bad_tracked))
 
 
 print()
@@ -227,9 +264,9 @@ check((VENDOR / "NOTICE.md").is_file(), "vendor NOTICE.md exists", "vendor NOTIC
 pm = VENDOR / "pathleak.m"
 if pm.is_file():
     t = pm.read_text(encoding="utf-8")
-    check("#include <sys/fsgetpath.h>" not in t and "extern ssize_t fsgetpath" in t,
-          "pathleak.m uses public-SDK-compatible declaration",
-          "pathleak.m still includes private header / missing extern declaration")
+    check("#include <sys/fsgetpath.h>" not in t and "dlsym(RTLD_DEFAULT, \"fsgetpath\")" in t,
+          "pathleak.m resolves fsgetpath at runtime (no private header / link-time SPI)",
+          "pathleak.m still has a private-header or link-time dependency")
 
 
 print()
@@ -294,8 +331,17 @@ for name in ("README.md", "README.zh.md", "README.ja.md"):
               "%s missing version range" % name)
         check("worse_query" in t,
               "%s documents the backend" % name, "%s missing backend docs" % name)
-        check("README.zh.md" in t or name == "README.zh.md",
-              "%s links Chinese README" % name, "%s missing language nav" % name)
+        # The current-language entry is bold text, not a self-link, so require
+        # the two *other* files as links plus the current file's own name.
+        others = [f for f in ("README.md", "README.zh.md", "README.ja.md") if f != name]
+        current = {"README.md": "English",
+                   "README.zh.md": "简体中文",
+                   "README.ja.md": "日本語"}[name]
+        checks = [(f in t, f) for f in others]
+        checks.append(("<strong>" + current + "</strong>" in t, "bold current-language label"))
+        check(all(ok for ok, _ in checks),
+              "%s has complete three-language nav" % name,
+              "%s missing: %s" % (name, ", ".join(label for ok, label in checks if not ok)))
 
 
 print()
