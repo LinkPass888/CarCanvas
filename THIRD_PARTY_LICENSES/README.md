@@ -65,3 +65,16 @@ the interrupted-swap recovery follow the publicly documented approach used by:
 No source from either project is copied into this repository; only the technique
 of reading `com.apple.security.application-groups` from the app's own signature
 via `SecTaskCopyValueForEntitlement` is reimplemented here.
+
+## NeoSpring respring payload
+
+`CarCanvas/Features/Backend/NeoSpringView.swift` contains the NeoSpring WebKit
+payload, taken from [frs0n/placard](https://github.com/frs0n/placard) (GPL-3.0),
+which credits rooootdev, skadz108 and neonmodder123. Placard is not otherwise
+vendored; only this technique is reused, under the same GPL-3.0-or-later terms
+as the rest of this repository.
+
+The bounded container scan in `CarCanvas/Features/Backend/CCContainerScanner.m`
+follows the approach in Placard's `Exploit/ContainerEnumeration.m` and
+kolbicz/WQFiles' LaunchServices listing; both rely on a probe-file inode with a
+fixed margin rather than walking the whole volume.

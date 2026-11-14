@@ -195,6 +195,44 @@ if len(tables) == 3:
 
 
 print()
+print("== 2a. Every key used in Swift exists in the strings files ==")
+def swift_keys(text):
+    """Collect L("KEY") / LF("KEY") literals without regex.
+    Regex here was repeatedly mangled by nested escaping, so parse
+    the two prefixes directly."""
+    found = set()
+    for prefix in ("L(", "LF("):
+        i = 0
+        while True:
+            i = text.find(prefix, i)
+            if i < 0:
+                break
+            j = i + len(prefix)
+            if j < len(text) and text[j] == chr(34):
+                k = j + 1
+                while k < len(text) and text[k] != chr(34):
+                    k += 1
+                key = text[j + 1:k]
+                if key and key[0].isupper() and all(
+                        c.isupper() or c.isdigit() or c == "_" for c in key):
+                    found.add(key)
+            i = j
+    return found
+used = set()
+for sf in iter_repo_files():
+    if sf.suffix == ".swift":
+        used.update(swift_keys(sf.read_text(encoding="utf-8")))
+if len(tables) == 3:
+    missing = sorted(used - set(tables["en"]))
+    check(not missing,
+          "all %d keys referenced from Swift exist in Localizable.strings" % len(used),
+          "keys used in Swift but missing from strings: " + ", ".join(missing))
+    unused = sorted(set(tables["en"]) - used)
+    if unused:
+        print("       NOTE: %d keys defined but not referenced: %s"
+              % (len(unused), ", ".join(unused[:8]) + ("..." if len(unused) > 8 else "")))
+
+print()
 print("== 2b. Language sanity (catches misplaced translations) ==")
 if len(tables) == 3:
     KANA = re.compile(r"[぀-ヿ]")          # hiragana + katakana

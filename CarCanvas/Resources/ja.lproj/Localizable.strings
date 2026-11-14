@@ -154,7 +154,6 @@
 "WALLPAPER_SEARCHING_TITLE" = "検索中";
 "WALLPAPER_SECTION_ACTIONS" = "操作アイテム";
 "WALLPAPER_SECTION_DEVICES" = "CarPlayデバイス";
-"WALLPAPER_SECTION_PREVIEW" = "CPBitmap プレビュー";
 "WALLPAPER_SET_BOTH" = "両方";
 "WALLPAPER_SET_DARK" = "ダーク";
 "WALLPAPER_SET_LIGHT" = "ライト";
@@ -162,10 +161,7 @@
 "SETTINGS_SECTION_CPBITMAP" = "CPBitmap";
 "SETTINGS_CHANNEL_ORDER" = "チャンネル順";
 "SETTINGS_CHANNEL_ORDER_FOOTER" = "公開デコーダは BGRA と RGBA で見解が分かれます。「壁紙」タブのプレビューで確認し、実機で検証してください。";
-"SETTINGS_REQUIRE_CONFIRM" = "上書き前に明示的な確認を求める";
 "SETTINGS_APP_GROUP_NONE" = "このビルドには App Group が署名されていません。com.apple.security.application-groups を保持するツール（Impactor、AltStore、SideStore、または自分の profile）で再署名してください。グループ名は任意です — CarCanvas は署名から読み取ります。";
-"WALLPAPER_PREVIEW_EMPTY" = "キャッシュテンプレートを読み込むと、チャンネル順とジオメトリをプレビューできます。";
-"WALLPAPER_PREVIEW_REFRESH" = "プレビューを更新";
 "BROWSER_ITEM_DETAIL" = "%@ - %@ バイト";
 "EXPORT_CONFIRM_TOGGLE" = "自分自身のデバイスで、選択した CarPlay キャッシュを上書きすることを確認します";
 "SETTINGS_SECTION_SESSION" = "セッション";
@@ -173,8 +169,5 @@
 "SETTINGS_LOGOUT_SUBTITLE" = "ユーザーセッションを終了し、CarPlay に壁紙キャッシュを再読み込みさせます。";
 "SETTINGS_LOGOUT_CONFIRM_TITLE" = "ログアウトしますか？";
 "SETTINGS_LOGOUT_CONFIRM_MESSAGE" = "すべての App が終了し、ログイン画面に戻ります。先に作業を保存してください。";
-"SETTINGS_LOGOUT_OK" = "ログアウト要求が受け付けられました。まもなくセッションが終了します。";
-"SETTINGS_LOGOUT_DENIED" = "iOS がログアウト要求を拒否しました（サンドボックス App はセッションを終了できません）。代わりにデバイスを再起動してください。";
-"SETTINGS_LOGOUT_UNAVAILABLE" = "このビルドでは launchctl に到達できませんでした。";
 "HISTORY_ENTRY_DETAIL" = "%@ - %@";
 "SETTINGS_FILZASLOP_TITLE" = "worse_query の研究";

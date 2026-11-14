@@ -22,9 +22,6 @@ final class CacheWriter {
                    dark: Bool,
                    light: Bool) throws -> Result {
         guard dark || light else { throw CCError.nothingSelected }
-        guard SettingsStore.shared.requireExplicitConfirmation else {
-            throw CCError.nothingSelected
-        }
 
         let resolved = try ContainerResolver().resolve()
         let selected = targets.filter { t in

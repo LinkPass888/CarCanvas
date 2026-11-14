@@ -154,7 +154,6 @@
 "WALLPAPER_SEARCHING_TITLE" = "Searching";
 "WALLPAPER_SECTION_ACTIONS" = "Actions";
 "WALLPAPER_SECTION_DEVICES" = "CarPlay Devices";
-"WALLPAPER_SECTION_PREVIEW" = "Wallpaper Preview";
 "WALLPAPER_SET_BOTH" = "Both";
 "WALLPAPER_SET_DARK" = "Dark";
 "WALLPAPER_SET_LIGHT" = "Light";
@@ -162,10 +161,7 @@
 "SETTINGS_SECTION_CPBITMAP" = "CPBitmap";
 "SETTINGS_CHANNEL_ORDER" = "Channel order";
 "SETTINGS_CHANNEL_ORDER_FOOTER" = "Public decoders disagree on BGRA vs RGBA. Use the preview on the Wallpaper tab and verify on your device.";
-"SETTINGS_REQUIRE_CONFIRM" = "Require explicit confirmation before overwrite";
 "SETTINGS_APP_GROUP_NONE" = "This build was signed without an App Group. Re-sign it with a tool that keeps com.apple.security.application-groups (Impactor, AltStore, SideStore, or your own profile). Any group name works - CarCanvas reads it from its signature.";
-"WALLPAPER_PREVIEW_EMPTY" = "Load a cache template to preview channel order and geometry.";
-"WALLPAPER_PREVIEW_REFRESH" = "Refresh preview";
 "BROWSER_ITEM_DETAIL" = "%@ - %@ bytes";
 "EXPORT_CONFIRM_TOGGLE" = "I confirm overwriting the selected CarPlay cache files on MY OWN device";
 "SETTINGS_SECTION_SESSION" = "Session";
@@ -173,8 +169,5 @@
 "SETTINGS_LOGOUT_SUBTITLE" = "Ends the user session so CarPlay reloads the wallpaper cache.";
 "SETTINGS_LOGOUT_CONFIRM_TITLE" = "Log out?";
 "SETTINGS_LOGOUT_CONFIRM_MESSAGE" = "All apps will close and you will return to the login screen. Save your work first.";
-"SETTINGS_LOGOUT_OK" = "Log-out request accepted. The session should end shortly.";
-"SETTINGS_LOGOUT_DENIED" = "iOS refused the log-out request (a sandboxed app cannot end the session). Restart the device instead.";
-"SETTINGS_LOGOUT_UNAVAILABLE" = "Could not reach launchctl on this build.";
 "HISTORY_ENTRY_DETAIL" = "%@ - %@";
 "SETTINGS_FILZASLOP_TITLE" = "worse_query research";

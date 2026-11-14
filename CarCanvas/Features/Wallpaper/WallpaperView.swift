@@ -10,7 +10,6 @@ struct WallpaperView: View {
     @State private var createLight = true
     @State private var message: String?
     @State private var isWorking = false
-    @State private var preview: CGImage?
 
     var body: some View {
         Form {
@@ -28,19 +27,6 @@ struct WallpaperView: View {
                     Label(L("WALLPAPER_CREATE_LOCAL"), systemImage: "square.and.arrow.down")
                 }
                 .disabled(pickerItem == nil || isWorking || (!createDark && !createLight))
-            }
-
-            Section(L("WALLPAPER_SECTION_PREVIEW")) {
-                if let preview {
-                    Image(decorative: preview, scale: 1)
-                        .resizable().scaledToFit()
-                        .frame(maxHeight: 180)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                } else {
-                    Text(L("WALLPAPER_PREVIEW_EMPTY"))
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                Button(L("WALLPAPER_PREVIEW_REFRESH")) { loadPreview() }
             }
 
             Section(L("WALLPAPER_EXPORT_FILENAME")) {
@@ -88,13 +74,6 @@ struct WallpaperView: View {
                 message = resultMessage
                 isWorking = false
             }
-        }
-    }
-
-    private func loadPreview() {
-        Task.detached(priority: .userInitiated) {
-            let image = try? WallpaperService().loadTemplate().preview()
-            await MainActor.run { preview = image }
         }
     }
 }

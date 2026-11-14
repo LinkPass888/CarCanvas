@@ -154,7 +154,6 @@
 "WALLPAPER_SEARCHING_TITLE" = "正在搜索";
 "WALLPAPER_SECTION_ACTIONS" = "操作";
 "WALLPAPER_SECTION_DEVICES" = "CarPlay 设备";
-"WALLPAPER_SECTION_PREVIEW" = "CPBitmap 预览";
 "WALLPAPER_SET_BOTH" = "两者";
 "WALLPAPER_SET_DARK" = "深色";
 "WALLPAPER_SET_LIGHT" = "浅色";
@@ -162,10 +161,7 @@
 "SETTINGS_SECTION_CPBITMAP" = "CPBitmap";
 "SETTINGS_CHANNEL_ORDER" = "通道顺序";
 "SETTINGS_CHANNEL_ORDER_FOOTER" = "公开解码器对 BGRA / RGBA 说法不一致。请在「壁纸」页用预览确认，并在真机上验证。";
-"SETTINGS_REQUIRE_CONFIRM" = "覆盖前要求显式确认";
 "SETTINGS_APP_GROUP_NONE" = "此版本签名时没有包含 App Group。请用能保留 com.apple.security.application-groups 的工具重新签名（Impactor、AltStore、SideStore 或你自己的 profile）。组名随意 —— CarCanvas 会从签名里读取。";
-"WALLPAPER_PREVIEW_EMPTY" = "加载缓存模板后可预览通道顺序与几何结构。";
-"WALLPAPER_PREVIEW_REFRESH" = "刷新预览";
 "BROWSER_ITEM_DETAIL" = "%@ - %@ 字节";
 "EXPORT_CONFIRM_TOGGLE" = "我确认在我自己的设备上覆盖所选的 CarPlay 缓存文件";
 "SETTINGS_SECTION_SESSION" = "会话";
@@ -173,8 +169,5 @@
 "SETTINGS_LOGOUT_SUBTITLE" = "结束当前用户会话，让 CarPlay 重新加载壁纸缓存。";
 "SETTINGS_LOGOUT_CONFIRM_TITLE" = "要注销吗？";
 "SETTINGS_LOGOUT_CONFIRM_MESSAGE" = "所有 App 都会关闭并返回登录界面，请先保存工作。";
-"SETTINGS_LOGOUT_OK" = "注销请求已被接受，会话应该很快结束。";
-"SETTINGS_LOGOUT_DENIED" = "iOS 拒绝了注销请求（沙盒 App 无法结束会话）。请改为重启设备。";
-"SETTINGS_LOGOUT_UNAVAILABLE" = "此版本无法调用 launchctl。";
 "HISTORY_ENTRY_DETAIL" = "%@ - %@";
 "SETTINGS_FILZASLOP_TITLE" = "worse_query 研究";

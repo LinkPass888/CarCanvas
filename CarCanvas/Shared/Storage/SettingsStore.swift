@@ -10,9 +10,6 @@ final class SettingsStore: ObservableObject {
     @Published var channelOrder: CPBitmapTemplate.ChannelOrder {
         didSet { defaults.set(channelOrder.rawValue, forKey: Keys.channelOrder) }
     }
-    @Published var requireExplicitConfirmation: Bool {
-        didSet { defaults.set(requireExplicitConfirmation, forKey: Keys.confirm) }
-    }
     @Published var hasSeenGuide: Bool {
         didSet { defaults.set(hasSeenGuide, forKey: Keys.guide) }
     }
@@ -21,7 +18,6 @@ final class SettingsStore: ObservableObject {
     private enum Keys {
         static let exportBaseName = "CCExportBaseName"
         static let channelOrder = "CCChannelOrder"
-        static let confirm = "CCRequireExplicitConfirmation"
         static let guide = "CCHasSeenGuide"
     }
 
@@ -29,19 +25,15 @@ final class SettingsStore: ObservableObject {
         exportBaseName = defaults.string(forKey: Keys.exportBaseName) ?? "CarCanvas"
         let raw = defaults.string(forKey: Keys.channelOrder) ?? CPBitmapTemplate.ChannelOrder.bgra.rawValue
         channelOrder = CPBitmapTemplate.ChannelOrder(rawValue: raw) ?? .bgra
-        // Explicit per-file confirmation is on by default and cannot be
-        // disabled from the UI without also acknowledging the risk.
-        requireExplicitConfirmation = defaults.object(forKey: Keys.confirm) as? Bool ?? true
         hasSeenGuide = defaults.bool(forKey: Keys.guide)
     }
 
     func clearSavedData() {
-        for key in [Keys.exportBaseName, Keys.channelOrder, Keys.confirm, Keys.guide] {
+        for key in [Keys.exportBaseName, Keys.channelOrder, Keys.guide] {
             defaults.removeObject(forKey: key)
         }
         exportBaseName = "CarCanvas"
         channelOrder = .bgra
-        requireExplicitConfirmation = true
         hasSeenGuide = false
     }
 }

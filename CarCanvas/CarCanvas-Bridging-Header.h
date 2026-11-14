@@ -4,6 +4,6 @@
 //
 
 #include "CCAppGroup.h"
-#include "CCLogout.h"
+#include "CCContainerScanner.h"
 #include "worse_query.h"
 #include "pathleak.h"
