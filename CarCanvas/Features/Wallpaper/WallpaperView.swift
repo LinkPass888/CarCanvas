@@ -200,7 +200,9 @@ struct WallpaperView: View {
                 try data.write(to: tmp)
                 defer { try? FileManager.default.removeItem(at: tmp) }
 
-                let entry = try await Task.detached(priority: .userInitiated) {
+                // The returned entry is intentionally unused: the success
+                // message no longer echoes the file name.
+                _ = try await Task.detached(priority: .userInitiated) {
                     try WallpaperService().createLocal(imageURL: tmp, appearances: appearances)
                 }.value
                 resultMessage = L("WALLPAPER_ADDED_TO_WALLPAPERS")
