@@ -169,7 +169,7 @@ struct CarPlayBrowserView: View {
         let order = settings.channelOrder
         Task {
             do { try await edits.stageRestores([backup], for: target, channelOrder: order) }
-            catch { error = error.localizedDescription }
+            catch { self.error = error.localizedDescription }
         }
     }
 
@@ -177,14 +177,14 @@ struct CarPlayBrowserView: View {
         let backups = history.originalBackups, order = settings.channelOrder
         Task {
             do { try await edits.stageRestores(backups, channelOrder: order) }
-            catch { error = error.localizedDescription }
+            catch { self.error = error.localizedDescription }
         }
     }
 
     private func clear(_ target: WallpaperTarget) {
         Task {
             do { try await edits.clearPending(for: target) }
-            catch { error = error.localizedDescription }
+            catch { self.error = error.localizedDescription }
         }
     }
 
@@ -194,7 +194,7 @@ struct CarPlayBrowserView: View {
                 try await edits.applyPending()
                 // Every successful file and its status are on disk already.
                 isRespringing = true
-            } catch { error = error.localizedDescription }
+            } catch { self.error = error.localizedDescription }
         }
     }
 
