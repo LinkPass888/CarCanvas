@@ -26,9 +26,10 @@ BOOL CCContainerLookup(NSString *bundleID,
                        NSString * _Nullable * _Nullable outPath,
                        NSString * _Nullable * _Nullable outToken);
 
-/// Every container ContainerManager will list, as {path, identifier} entries.
-/// This is the route that actually works without a special identity.
-NSArray<NSDictionary<NSString *, NSString *> *> * _Nonnull CCContainerEnumerate(void);
+/// Every raw container path ContainerManager lists, as {path, identifier?}.
+/// The identifier comes from the query object, when that getter is available;
+/// an unreadable metadata plist must not hide a candidate path.
+NSArray<NSDictionary<NSString *, NSString *> *> * _Nonnull CCContainerEnumerate(NSString * _Nullable * _Nullable diagnostic);
 
 /// Whether the ContainerManager query symbols are available at all.
 BOOL CCContainerQueryIsAvailable(void);

@@ -64,14 +64,14 @@ final class WallpaperPreviewStore: ObservableObject {
     /// Device pairing and the wallpaper cache are probed separately. Connecting
     /// CarPlay does NOT create the cache files — those appear only after the
     /// six patterned wallpapers have been picked in CarPlay Settings.
-    nonisolated static func loadFromDevice() -> Loaded {
+    nonisolated static func loadFromDevice(forceRefresh: Bool = false) -> Loaded {
         var result = Loaded()
 
         // Do the container work first, then probe pairings. Both use
         // worse_query's Caches swap; running them back-to-back in the other
         // order can leave the second one reading a half-restored symlink.
         do {
-            let resolved = try ContainerResolver().resolve()
+            let resolved = try ContainerResolver().resolve(forceRefresh: forceRefresh)
             let dark = resolved.files.first { $0.isDark }
             let light = resolved.files.first { $0.isLight }
             let service = WallpaperService()

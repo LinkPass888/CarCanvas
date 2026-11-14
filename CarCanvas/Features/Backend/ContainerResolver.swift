@@ -1,15 +1,11 @@
 import Foundation
 import Darwin
 
-/// Finds the CarPlayWallpaper data container.
-///
-/// Primary route: ask ContainerManager for the container of
-/// `com.apple.CarPlayWallpaper` by bundle identifier, exactly as the original
-/// CarCanvas did. That returns a path and a sandbox-extension token immediately.
-///
-/// Fallback: a bounded inode walk, only for builds where the query is refused.
-/// On iOS 26 that scan can take close to an hour, so it is never the first
-/// choice and it is never run twice for the same launch.
+/// Finds the CarPlayWallpaper data container using query-object identifiers,
+/// LaunchServices mappings, then scoped identity probes of trusted candidate
+/// paths. The bounded inode walk is a fallback, not proof of target absence.
+/// Automatic callers share one session result, including failure; only an
+/// explicit refresh starts another discovery flight.
 final class ContainerResolver {
     struct Resolved {
         let containerPath: String
@@ -17,91 +13,180 @@ final class ContainerResolver {
         let files: [WallpaperTarget]
     }
 
-    /// One shared, launch-long result. The container does not move while the
-    /// app is running, so re-resolving on every screen appearance is pointless
-    /// work — and re-running the fallback scan would be far worse.
+    /// Successful and failed lookups are shared for this app session. The
+    /// state lock is never held while scanning or acquiring an extension.
     private static let cache = ResolverCache()
 
     private final class ResolverCache {
-        private let lock = NSLock()
-        private var cached: Resolved?
+        private let condition = NSCondition()
+        private var cached: Result<Resolved, Error>?
+        private var generation = 0
+        private var completedGeneration = 0
+        private var minimumGeneration = 1
+        private var isLoading = false
+        private var isRefreshing = false
+        private var loadingThread: Thread?
 
-        func value(for key: String) -> Resolved? {
-            lock.lock(); defer { lock.unlock() }
-            guard let cached, cached.containerPath == key || key.isEmpty else { return cached }
-            return cached
-        }
+        func value(forceRefresh: Bool, load: () throws -> Resolved) throws -> Resolved {
+            condition.lock()
+            let requestedGeneration: Int
+            if forceRefresh {
+                requestedGeneration = generation + (isLoading && isRefreshing ? 0 : 1)
+            } else if let cached {
+                condition.unlock()
+                return try cached.get()
+            } else {
+                requestedGeneration = max(minimumGeneration, max(1, generation))
+            }
 
-        func store(_ resolved: Resolved) {
-            lock.lock(); defer { lock.unlock() }
-            cached = resolved
+            while true {
+                if let cached, completedGeneration >= requestedGeneration {
+                    condition.unlock()
+                    return try cached.get()
+                }
+                if isLoading {
+                    // A synchronous callback must not wait for its own load.
+                    guard loadingThread !== Thread.current,
+                          !WQAccess.hasActiveExtensionOnCurrentThread else {
+                        condition.unlock()
+                        throw NSError(domain: "CarCanvas.ContainerResolver", code: 1,
+                                      userInfo: [NSLocalizedDescriptionKey: "Recursive CarPlay container lookup."])
+                    }
+                    condition.wait()
+                    continue
+                }
+
+                generation += 1
+                let currentGeneration = generation
+                isLoading = true
+                isRefreshing = forceRefresh
+                loadingThread = Thread.current
+                condition.unlock()
+                let result = Result { try load() }
+                condition.lock()
+                if currentGeneration >= minimumGeneration { cached = result }
+                completedGeneration = currentGeneration
+                isLoading = false
+                isRefreshing = false
+                loadingThread = nil
+                condition.broadcast()
+            }
         }
 
         func invalidate() {
-            lock.lock(); defer { lock.unlock() }
+            condition.lock(); defer { condition.unlock() }
             cached = nil
+            minimumGeneration = generation + 1
+            condition.broadcast()
         }
     }
 
-    /// Wallpaper caches are small; this is only for the fallback path.
+    private final class LookupDiagnostics {
+        var deadline: TimeInterval = 0
+        var seen: Set<String> = []
+        var mappedIDs: [String: String] = [:]
+        var knownNonTargets = 0
+        var probes = 0
+        var preGrantIDs = 0
+        var postGrantIDs = 0
+        var grantAttempts = 0
+        var grantsSucceeded = 0
+        var probeFailures = 0
+        var excludedPaths = 0
+        var timedOut = false
+        var samples: [String] = []
+    }
+    private var lookup = LookupDiagnostics()
+
+    /// One budget shared by candidate probes and the fallback inode walk.
     private let scanBudget: TimeInterval = 20
 
     static func invalidateCache() { cache.invalidate() }
 
     func resolve(forceRefresh: Bool = false) throws -> Resolved {
-        if !forceRefresh, let hit = ContainerResolver.cache.value(for: "") { return hit }
-
-        try WQAccess.shared.preflight()
-        let resolved = try resolveUncached()
-        ContainerResolver.cache.store(resolved)
-        return resolved
+        try ContainerResolver.cache.value(forceRefresh: forceRefresh) {
+            try WQAccess.shared.preflight()
+            return try resolveUncached()
+        }
     }
 
     private func resolveUncached() throws -> Resolved {
+        lookup = LookupDiagnostics()
+        lookup.deadline = ProcessInfo.processInfo.systemUptime + scanBudget
+        defer {
+            CCLog.info("container discovery: probes=\(lookup.probes) preGrantIDs=\(lookup.preGrantIDs) postGrantIDs=\(lookup.postGrantIDs) grantAttempts=\(lookup.grantAttempts) grantsSucceeded=\(lookup.grantsSucceeded) probeFailures=\(lookup.probeFailures) excludedPaths=\(lookup.excludedPaths) knownNonTargets=\(lookup.knownNonTargets) timedOut=\(lookup.timedOut)")
+        }
         var containerPath: String?
-        var route = "query"
+        var route = "container enumeration"
+        var enumerationDiagnostic: NSString?
+        let enumerated = CCContainerEnumerate(&enumerationDiagnostic)
+        if let enumerationDiagnostic { CCLog.info(enumerationDiagnostic as String) }
 
-        // 1. Enumerate containers through ContainerManager. The bundle-id
-        //    single-result query needs an identity this build does not have and
-        //    always returns nothing, so enumeration is the working route.
-        route = "container enumeration"
-        let enumerated = CCContainerEnumerate()
-        CCLog.info("container enumeration: \(enumerated.count) containers")
+        // MCM/LS mappings can identify a path without reading its root-only
+        // metadata. Conflicting mappings are not accepted as identity proof.
+        var mappedIDs: [String: String] = [:]
+        var conflicts: Set<String> = []
+        var candidates: [String] = []
+        func addCandidate(_ path: String, identifier: String?) {
+            let key = WQWhitelist.canonicalContainerPath(path) ?? path
+            candidates.append(key)
+            guard let identifier, !identifier.isEmpty, !conflicts.contains(key) else { return }
+            if let existing = mappedIDs[key], existing != identifier {
+                mappedIDs[key] = nil
+                conflicts.insert(key)
+                CCLog.error("container identity mappings disagree for \(key)")
+            } else {
+                mappedIDs[key] = identifier
+            }
+        }
         for entry in enumerated {
-            guard let found = entry["path"], entry["identifier"] == WQWhitelist.carPlayWallpaperBundleID else { continue }
-            containerPath = found
-            CCLog.info("container enumeration matched: \(found)")
-            break
+            if let path = entry["path"] {
+                if entry["identifierConflict"] == "true" {
+                    conflicts.insert(WQWhitelist.canonicalContainerPath(path) ?? path)
+                }
+                addCandidate(path, identifier: entry["identifier"])
+            }
+        }
+        if CCLSIsAvailable() {
+            let all = CCLSAllContainers()
+            CCLog.info("launchservices: \(all.count) path identifiers")
+            for (path, identifier) in all { addCandidate(path, identifier: identifier) }
+        } else {
+            CCLog.error("launchservices unavailable")
         }
 
-        // 2. LaunchServices. Reads each installed app's dataContainerURL, so it
-        //    needs neither a query nor an inode walk. This is the route WQFiles
-        //    uses when ContainerManager refuses.
+        lookup.mappedIDs = mappedIDs
+
+        // Exact target mappings go first, before any unknown candidate grant.
+        for path in candidates where mappedIDs[path] == WQWhitelist.carPlayWallpaperBundleID {
+            if let found = identifyCandidate(path, mappedIdentifier: mappedIDs[path]) {
+                containerPath = found
+                route = "container identity mapping"
+                break
+            }
+        }
         if containerPath == nil {
-            route = "launchservices"
-            if CCLSIsAvailable() {
-                let all = CCLSAllContainers()
-                CCLog.info("launchservices: \(all.count) containers")
-                for (path, identifier) in all where identifier == WQWhitelist.carPlayWallpaperBundleID {
-                    containerPath = path
-                    CCLog.info("launchservices: \(path)")
+            for path in candidates where mappedIDs[path] == nil {
+                guard ProcessInfo.processInfo.systemUptime < lookup.deadline else {
+                    lookup.timedOut = true
                     break
                 }
-            } else {
-                CCLog.error("launchservices unavailable")
+                if let found = identifyCandidate(path) {
+                    containerPath = found
+                    route = "enumerated candidate probe"
+                    break
+                }
             }
         }
 
-        // 3. Last resort: a short bounded inode scan. Skipped entirely once
-        //    enumeration has already shown the container is not listed - that
-        //    answer will not change by walking inodes for 15 seconds.
-        if containerPath == nil, enumerated.isEmpty {
+        // A partial nonempty enumeration does not prove the target is absent.
+        if containerPath == nil, ProcessInfo.processInfo.systemUptime < lookup.deadline {
             route = "inode scan"
             containerPath = scanForContainer()
-        } else if containerPath == nil {
-            CCLog.info("skipping inode scan: enumeration listed \(enumerated.count) containers without a match")
         }
-
+        if containerPath == nil && ProcessInfo.processInfo.systemUptime >= lookup.deadline {
+            lookup.timedOut = true
+        }
         guard let container = containerPath else {
             CCLog.error("container lookup failed (route: \(route))")
             throw CCError.cacheNotFound
@@ -189,36 +274,67 @@ final class ContainerResolver {
         return targets
     }
 
-    /// Bounded inode walk. Only reached when the direct query is unavailable.
+    /// Only identity metadata is exposed by the short-lived discovery grant.
+    /// The access layer binds an exact match to the directory's device/inode.
+    private func identifyCandidate(_ path: String, mappedIdentifier: String? = nil) -> String? {
+        guard let candidate = WQWhitelist.canonicalContainerPath(path) else {
+            lookup.excludedPaths += 1
+            if mappedIdentifier == WQWhitelist.carPlayWallpaperBundleID {
+                CCLog.error("CarPlay identity matched outside the Application UUID whitelist: \(path)")
+            }
+            return nil
+        }
+        guard lookup.seen.insert(candidate).inserted else { return nil }
+        if let mappedIdentifier, mappedIdentifier != WQWhitelist.carPlayWallpaperBundleID {
+            lookup.knownNonTargets += 1
+            return nil
+        }
+        lookup.probes += 1
+        let probe = WQAccess.shared.probeContainerIdentifier(candidate, mappedIdentifier: mappedIdentifier)
+        if probe.grantAttempted { lookup.grantAttempts += 1 }
+        if probe.grantSucceeded { lookup.grantsSucceeded += 1 }
+        if let error = probe.error {
+            lookup.probeFailures += 1
+            if lookup.probeFailures <= 3 { CCLog.error("container identity probe: \(error)") }
+        }
+        guard let identifier = probe.identifier else { return nil }
+        if probe.grantSucceeded { lookup.postGrantIDs += 1 }
+        else { lookup.preGrantIDs += 1 }
+        if lookup.samples.count < 3 { lookup.samples.append(identifier) }
+        guard WQWhitelist.isAllowedContainer(candidate, identifier: identifier) else { return nil }
+        CCLog.info("CarPlay container identity matched (afterGrant=\(probe.grantSucceeded)): \(candidate)")
+        return candidate
+    }
+
+    /// The scan supplies paths, not identifiers. A candidate may need a
+    /// scoped grant before either xattr or metadata can identify it.
     private func scanForContainer() -> String? {
         var found: String?
         var candidates = 0
-        var identified = 0
-        var sample: [String] = []
-
-        _ = CCScanApplicationContainers(scanBudget) { path in
+        let identifiersBeforeScan = lookup.preGrantIDs + lookup.postGrantIDs
+        let remaining = max(0, lookup.deadline - ProcessInfo.processInfo.systemUptime)
+        var scanDiagnostic: NSString?
+        let inspected = CCScanApplicationContainers(remaining, { path in
             candidates += 1
-            guard let identifier = CCContainerIdentifier(path) else {
-                return false   // could not read this one's identifier
+            guard ProcessInfo.processInfo.systemUptime < self.lookup.deadline else {
+                self.lookup.timedOut = true
+                return true
             }
-            identified += 1
-            if sample.count < 3 { sample.append(identifier) }
-            if identifier == WQWhitelist.carPlayWallpaperBundleID,
-               WQWhitelist.isAllowedContainer(path, identifier: identifier) {
-                found = path
+            let key = WQWhitelist.canonicalContainerPath(path) ?? path
+            if let matched = self.identifyCandidate(path, mappedIdentifier: self.lookup.mappedIDs[key]) {
+                found = matched
                 return true
             }
             return false
-        }
+        }, &scanDiagnostic)
 
-        // The two failure modes are completely different, so log them apart:
-        //  - identified == 0  -> xattr is unreadable, scanning can never work
-        //  - identified > 0   -> xattr works, CarPlayWallpaper just isn't there
-        CCLog.info("scan: \(candidates) candidates, \(identified) identified")
-        if identified == 0 && candidates > 0 {
-            CCLog.error("scan: identifiers unreadable on this build; enumeration/query required")
-        } else if !sample.isEmpty {
-            CCLog.info("scan sample ids: \(sample.joined(separator: ", "))")
+        if let scanDiagnostic { CCLog.info(scanDiagnostic as String) }
+        if inspected < 0 { CCLog.error("container inode scan unavailable (result \(inspected))") }
+        if ProcessInfo.processInfo.systemUptime >= lookup.deadline { lookup.timedOut = true }
+        let scanIDs = lookup.preGrantIDs + lookup.postGrantIDs - identifiersBeforeScan
+        CCLog.info("scan: \(candidates) raw candidates, \(scanIDs) identified")
+        if !lookup.samples.isEmpty {
+            CCLog.info("discovery sample ids: \(lookup.samples.joined(separator: ", "))")
         }
         CCLog.info("scan result: \(found ?? "none")")
         return found

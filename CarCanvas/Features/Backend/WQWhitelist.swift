@@ -31,20 +31,29 @@ enum WQWhitelist {
     /// variant before the extension. Accept both, and nothing else.
     private static let cacheFilePattern = #"^CARWallpaper[A-Za-z]+-(Dark|Light)(-\d+)?\.cpbitmap$"#
 
-    /// A container directory is acceptable only if it resolves to the
-    /// CarPlayWallpaper data container. `identifier` comes from the
-    /// container metadata plist, not from user input.
+    /// Discovery accepts only a canonical, direct UUID child of Application.
+    /// This is a path-shape check, not proof of the container's identity; the
+    /// scoped probe separately checks directory type, inode and identifier.
+    static func canonicalContainerPath(_ path: String) -> String? {
+        let canonical = path.hasPrefix("/private/var/") ? String(path.dropFirst(8)) : path
+        let prefix = allowedContainerPrefixes[0] + "/"
+        guard canonical.hasPrefix(prefix) else { return nil }
+        let name = String(canonical.dropFirst(prefix.count))
+        guard let uuid = UUID(uuidString: name),
+              uuid.uuidString.caseInsensitiveCompare(name) == .orderedSame else { return nil }
+        return canonical
+    }
+
+    /// Final access additionally requires the exact CarPlay identifier from
+    /// a query object or a scoped identity probe, never from a UI path field.
     static func isAllowedContainer(_ path: String, identifier: String) -> Bool {
-        guard identifier == carPlayWallpaperBundleID else { return false }
-        return allowedContainerPrefixes.contains { prefix in
-            path.hasPrefix(prefix + "/") && !path.contains("..")
-        }
+        identifier == carPlayWallpaperBundleID && canonicalContainerPath(path) != nil
     }
 
     static func isAllowedCacheDirectory(_ path: String) -> Bool {
-        guard allowedContainerPrefixes.contains(where: { path.hasPrefix($0 + "/") }),
-              !path.contains("..") else { return false }
-        return path.hasSuffix("/" + cacheRelativePath)
+        let suffix = "/" + cacheRelativePath
+        guard path.hasSuffix(suffix) else { return false }
+        return canonicalContainerPath(String(path.dropLast(suffix.count))) != nil
     }
 
     static func isAllowedCacheFile(_ path: String, in cacheDirectory: String) -> Bool {
@@ -52,14 +61,15 @@ enum WQWhitelist {
               path.hasPrefix(cacheDirectory + "/"),
               !path.contains("..") else { return false }
         let name = (path as NSString).lastPathComponent
+        guard path == cacheDirectory + "/" + name else { return false }
         guard let regex = try? NSRegularExpression(pattern: cacheFilePattern) else { return false }
         let range = NSRange(name.startIndex..., in: name)
         return regex.firstMatch(in: name, range: range) != nil
     }
 
     static func appearance(of fileName: String) -> WallpaperTarget.Appearance {
-        if fileName.contains("-Dark-") { return .dark }
-        if fileName.contains("-Light-") { return .light }
+        if fileName.contains("-Dark-") || fileName.hasSuffix("-Dark.cpbitmap") { return .dark }
+        if fileName.contains("-Light-") || fileName.hasSuffix("-Light.cpbitmap") { return .light }
         return .unknown
     }
 }

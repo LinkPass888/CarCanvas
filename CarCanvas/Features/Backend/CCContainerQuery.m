@@ -16,6 +16,7 @@ typedef void (*CCQuerySetFlagsFn)(void *, uint64_t);
 typedef void (*CCQuerySetPartFn)(void *, uint64_t);
 typedef void *(*CCQueryGetSingleResultFn)(void *);
 typedef const char *(*CCObjectGetPathFn)(void *);
+typedef const char *(*CCObjectGetIdentifierFn)(void *);
 typedef void (*CCQueryFreeFn)(void *);
 typedef void (*CCObjectFreeFn)(void *);
 typedef int (*CCObjectSandboxExtensionActivateFn)(void *, const char **);
@@ -29,6 +30,7 @@ struct CCContainerAPI {
     CCQuerySetPartFn setPart;
     CCQueryGetSingleResultFn singleResult;
     CCObjectGetPathFn objectGetPath;
+    CCObjectGetIdentifierFn objectGetIdentifier;
     CCQueryFreeFn queryFree;
     CCObjectFreeFn objectFree;
     CCObjectSandboxExtensionActivateFn activate;
@@ -51,6 +53,10 @@ static const struct CCContainerAPI *CCAPI(void)
         api.setPart = (CCQuerySetPartFn)dlsym(handle, "container_query_operation_set_part");
         api.singleResult = (CCQueryGetSingleResultFn)dlsym(handle, "container_query_get_single_result");
         api.objectGetPath = (CCObjectGetPathFn)dlsym(handle, "container_object_get_path");
+        api.objectGetIdentifier = (CCObjectGetIdentifierFn)dlsym(handle, "container_object_get_identifier");
+        if (!api.objectGetIdentifier) {
+            api.objectGetIdentifier = (CCObjectGetIdentifierFn)dlsym(handle, "container_result_get_identifier");
+        }
         api.queryFree = (CCQueryFreeFn)dlsym(handle, "container_query_free");
         api.objectFree = (CCObjectFreeFn)dlsym(handle, "container_object_free");
         api.activate = (CCObjectSandboxExtensionActivateFn)dlsym(handle, "container_object_sandbox_extension_activate");
@@ -67,59 +73,78 @@ BOOL CCContainerQueryIsAvailable(void)
 
 typedef void (*CCQueryIterateFn)(void *, bool (^)(void *));
 
-/// Enumerates every container ContainerManager will hand out, by walking the
-/// classes the way WQFiles does. The bundle-id single-result query needs an
-/// identity this build does not have, which is why it returns nothing.
-NSArray<NSDictionary<NSString *, NSString *> *> *CCContainerEnumerate(void)
+/// Enumerate raw paths and query-object identifiers independently. Metadata
+/// access belongs to the resolver's scoped probe, not to this collection step.
+NSArray<NSDictionary<NSString *, NSString *> *> *CCContainerEnumerate(NSString **diagnostic)
 {
     const struct CCContainerAPI *api = CCAPI();
-    if (!api->handle) return @[];
-
+    if (!api->handle) {
+        if (diagnostic) *diagnostic = @"container enumeration unavailable: dylib missing";
+        return @[];
+    }
     CCQueryIterateFn iterate =
         (CCQueryIterateFn)dlsym(api->handle, "container_query_iterate_results_sync");
-    if (!iterate || !api->create || !api->setClass || !api->objectGetPath) return @[];
+    if (!iterate || !api->create || !api->setClass || !api->objectGetPath || !api->queryFree) {
+        if (diagnostic) *diagnostic = @"container enumeration unavailable: required symbols missing";
+        return @[];
+    }
 
-    NSMutableArray<NSDictionary<NSString *, NSString *> *> *results = [NSMutableArray array];
-    NSMutableSet<NSString *> *seen = [NSMutableSet set];
-
-    for (uint64_t cls = 1; cls <= 14; cls++) {
+    NSMutableDictionary<NSString *, NSMutableDictionary<NSString *, NSString *> *> *byPath = [NSMutableDictionary dictionary];
+    NSMutableSet<NSString *> *conflicts = [NSMutableSet set];
+    __block NSUInteger callbacks = 0;
+    NSUInteger createFailures = 0, exceptions = 0;
+    // Include class 0, used by the identifier-map query on newer builds.
+    for (uint64_t cls = 0; cls <= 14; cls++) {
         void *query = api->create();
-        if (!query) continue;
-        api->setClass(query, cls);
+        if (!query) { createFailures++; continue; }
         @try {
+            api->setClass(query, cls);
             iterate(query, ^bool(void *object) {
+                @synchronized (byPath) { callbacks++; }
                 const char *path = object ? api->objectGetPath(object) : NULL;
                 if (!path || !path[0]) return true;
                 NSString *value = [NSString stringWithUTF8String:path];
-                if (value.length == 0 || [seen containsObject:value]) return true;
-                [seen addObject:value];
-
-                // Read the identifier straight off the container directory.
-                NSString *metadata = [value stringByAppendingPathComponent:
-                                      @".com.apple.mobile_container_manager.metadata.plist"];
-                NSString *identifier = nil;
-                NSData *data = [NSData dataWithContentsOfFile:metadata];
-                if (data) {
-                    id plist = [NSPropertyListSerialization propertyListWithData:data
-                                                                        options:0
-                                                                         format:NULL
-                                                                          error:NULL];
-                    if ([plist isKindOfClass:[NSDictionary class]]) {
-                        id raw = [(NSDictionary *)plist objectForKey:@"MCMMetadataIdentifier"];
-                        if ([raw isKindOfClass:[NSString class]]) identifier = raw;
+                if (value.length == 0) return true;
+                if ([value hasPrefix:@"/private/var/"]) value = [value substringFromIndex:8];
+                const char *rawIdentifier = api->objectGetIdentifier ? api->objectGetIdentifier(object) : NULL;
+                NSString *identifier = rawIdentifier && rawIdentifier[0]
+                    ? [NSString stringWithUTF8String:rawIdentifier] : nil;
+                @synchronized (byPath) {
+                    NSMutableDictionary<NSString *, NSString *> *entry = byPath[value];
+                    if (!entry) {
+                        entry = [NSMutableDictionary dictionaryWithObject:value forKey:@"path"];
+                        byPath[value] = entry;
                     }
-                }
-                if (identifier.length) {
-                    @synchronized (results) {
-                        [results addObject:@{@"path": value, @"identifier": identifier}];
+                    // A later class may provide the ID missing from the first
+                    // result. Do not discard that duplicate path's identifier.
+                    NSString *existing = entry[@"identifier"];
+                    if (existing.length && identifier.length && ![existing isEqualToString:identifier]) {
+                        [entry removeObjectForKey:@"identifier"];
+                        [conflicts addObject:value];
+                    } else if (identifier.length && ![conflicts containsObject:value]) {
+                        entry[@"identifier"] = identifier;
                     }
                 }
                 return true;
             });
         } @catch (__unused NSException *exception) {
-            // A class that refuses the query is simply skipped.
+            exceptions++;
         }
-        if (api->queryFree) api->queryFree(query);
+        api->queryFree(query);
+    }
+    NSMutableArray<NSDictionary<NSString *, NSString *> *> *results = [NSMutableArray array];
+    NSUInteger objectIDs = 0;
+    for (NSString *path in [[byPath allKeys] sortedArrayUsingSelector:@selector(compare:)]) {
+        NSMutableDictionary<NSString *, NSString *> *entry = byPath[path];
+        if ([conflicts containsObject:path]) entry[@"identifierConflict"] = @"true";
+        if ([entry[@"identifier"] length]) objectIDs++;
+        [results addObject:entry];
+    }
+    if (diagnostic) {
+        *diagnostic = [NSString stringWithFormat:@"container enumeration: callbacks=%lu rawPaths=%lu objectIDs=%lu getter=%@ createFailures=%lu exceptions=%lu conflicts=%lu",
+                       (unsigned long)callbacks, (unsigned long)results.count, (unsigned long)objectIDs,
+                       api->objectGetIdentifier ? @"available" : @"missing", (unsigned long)createFailures,
+                       (unsigned long)exceptions, (unsigned long)conflicts.count];
     }
     return results;
 }

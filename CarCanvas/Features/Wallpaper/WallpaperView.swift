@@ -103,9 +103,9 @@ struct WallpaperView: View {
         .task {
             guard !hasLoadedOnce else { return }
             hasLoadedOnce = true
-            refresh()
+            await refresh()
         }
-        .refreshable { refresh(forceRefresh: true) }
+        .refreshable { await refresh(forceRefresh: true) }
         .onChange(of: pickerItem) { _, _ in loadPickedImage() }
     }
 
@@ -152,22 +152,16 @@ struct WallpaperView: View {
         }
     }
 
-    private func refresh(forceRefresh: Bool = false) {
-        if forceRefresh { ContainerResolver.invalidateCache() }
+    @MainActor
+    private func refresh(forceRefresh: Bool = false) async {
         preview.beginSearching()
-        Task {
-            // Heavy container work off the main actor, then publish on main.
-            // loadFromDevice() never blocks on the inode scan unless the
-            // enumeration came back completely empty, so this returns quickly.
-            let loaded = await Task.detached(priority: .userInitiated) {
-                WallpaperPreviewStore.loadFromDevice()
-            }.value
-            let newestBackup = HistoryStore.shared.backups().first
-            await MainActor.run {
-                preview.apply(loaded)
-                backup = newestBackup
-            }
-        }
+        // Pass refresh through to the resolver rather than clearing a cache
+        // before an older in-flight load has had a chance to repopulate it.
+        let loaded = await Task.detached(priority: .userInitiated) {
+            WallpaperPreviewStore.loadFromDevice(forceRefresh: forceRefresh)
+        }.value
+        preview.apply(loaded)
+        backup = HistoryStore.shared.backups().first
     }
 
     /// Shows the picked image in both slots as soon as it is chosen, so the

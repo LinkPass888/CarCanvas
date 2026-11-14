@@ -3,26 +3,44 @@ import Darwin
 
 /// Narrow Objective-C bridge to the GPL-3.0 `worse_query` primitive.
 ///
-/// Design rules:
-///  * `withAccess` is the ONLY way to obtain an extension handle.
-///  * Callers cannot pass an arbitrary path: only `WQWhitelist` roots are
-///    accepted, and every candidate is re-validated before use.
-///  * The App Group is read from this app's own code signature at runtime,
-///    the same way WQFiles and Regitela do it. Whichever group the signing
-///    tool embedded is the one used, so the group name does not matter and
-///    the entitlements file needs no editing.
-///  * The handle is always released in `defer`, even on error.
-///  * No path is persisted, logged, or exposed through the UI.
+/// Final cache access requires a verified CarPlay container. Discovery may
+/// briefly grant a trusted Application UUID candidate, but exposes only its
+/// identifier and releases the handle before returning. All extension scopes
+/// are synchronous and serialized because worse_query swaps the App Group's
+/// Caches directory. No lock is held across an await.
 final class WQAccess {
     static let shared = WQAccess()
-    private init() {}
+    private init() { appGroupIdentifier = CCAppGroupIdentifier() }
 
-    /// Populated at first use from the signature. `nil` means the build was
-    /// signed without an App Group (Sideloadly, wildcard profile, ...).
-    private(set) lazy var appGroupIdentifier: String? = CCAppGroupIdentifier()
+    /// Read once from the signature; immutable even when first used off main.
+    let appGroupIdentifier: String?
 
     /// Every group listed in the signature, for the diagnostics panel.
     var entitledGroups: [String] { CCAppGroupEntitledIdentifiers() }
+
+    private let accessLock = NSRecursiveLock()
+    private static let extensionScopeKey = "CarCanvas.WQAccess.extensionScope"
+
+    /// Synchronous scopes never cross await, so this marker can prevent a
+    /// callback from waiting on a resolver flight that needs its own lock.
+    static var hasActiveExtensionOnCurrentThread: Bool {
+        Thread.current.threadDictionary[extensionScopeKey] != nil
+    }
+    private var preferredAltFlags: Bool?
+    private var retainedHandle: Int64 = -1
+
+    private struct ContainerIdentity: Equatable {
+        let device: dev_t
+        let inode: ino_t
+    }
+    private var verifiedContainers: [String: ContainerIdentity] = [:]
+
+    struct IdentifierProbe {
+        var identifier: String?
+        var grantAttempted = false
+        var grantSucceeded = false
+        var error: String?
+    }
 
     /// Fails closed on unsupported OS versions before touching any
     /// ContainerManager symbol.
@@ -31,8 +49,7 @@ final class WQAccess {
     }
 
     /// Worse_query needs an App Group because it swaps that group's Caches
-    /// directory. The direct ContainerManager query does not, so the group is
-    /// only required on the path that actually calls worse_query.
+    /// directory. It is required only when an extension is actually requested.
     func requireAppGroup() throws -> String {
         try preflight()
         guard let group = appGroupIdentifier,
@@ -44,16 +61,20 @@ final class WQAccess {
         return group
     }
 
-    /// Scoped read of the single allowed CarPlay preference file. No directory
-    /// is ever granted, so this cannot be widened into a general file read.
+    /// Scoped read of the single allowed CarPlay preference file.
     func withCarPlayPreferences<T>(_ body: (Data) throws -> T) throws -> T {
+        accessLock.lock(); defer { accessLock.unlock() }
         let group = try requireAppGroup()
         let path = WQWhitelist.carPlayPreferencesPath
         guard WQWhitelist.isAllowedCarPlayPreferences(path) else {
             throw CCError.outsideWhitelist(path)
         }
         let handle = try acquire(path: path, group: group)
-        defer { worse_query_release(handle) }
+        Thread.current.threadDictionary[WQAccess.extensionScopeKey] = true
+        defer {
+            worse_query_release(handle)
+            Thread.current.threadDictionary.removeObject(forKey: WQAccess.extensionScopeKey)
+        }
 
         guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)) else {
             CCLog.error("prefs file unreadable after token")
@@ -62,12 +83,86 @@ final class WQAccess {
         return try body(data)
     }
 
-    private var retainedHandle: Int64 = -1
+    /// Identifier-only discovery. Callers supply paths from ContainerManager,
+    /// LaunchServices or fsgetpath, never an editable UI path. A denied pre-stat
+    /// may need a token, but no identity file is read after grant until lstat
+    /// confirms a non-symlink directory and its captured inode still matches.
+    func probeContainerIdentifier(_ path: String, mappedIdentifier: String? = nil) -> IdentifierProbe {
+        accessLock.lock(); defer { accessLock.unlock() }
+        var result = IdentifierProbe()
+        do {
+            try preflight()
+            guard let candidate = WQWhitelist.canonicalContainerPath(path) else {
+                throw CCError.outsideWhitelist(path)
+            }
+            let before = try containerIdentity(at: candidate, allowDenied: true)
+            let observed = before == nil ? nil : CCContainerIdentifier(candidate)
+            if let mappedIdentifier, let observed, mappedIdentifier != observed {
+                throw CCError.outsideWhitelist(candidate)
+            }
+            if let before, let identifier = observed ?? mappedIdentifier {
+                guard let after = try containerIdentity(at: candidate), before == after else {
+                    throw CCError.outsideWhitelist(candidate)
+                }
+                result.identifier = identifier
+                if identifier == WQWhitelist.carPlayWallpaperBundleID {
+                    verifiedContainers[candidate] = after
+                }
+                return result
+            }
 
-    /// Keeps a container extension alive for the process lifetime. Used for the
-    /// handle ContainerManager already handed us, so we do not immediately ask
-    /// for a second extension for the same container.
+            let group = try requireAppGroup()
+            result.grantAttempted = true
+            let handle = try acquire(path: candidate, group: group, directory: true)
+            Thread.current.threadDictionary[WQAccess.extensionScopeKey] = true
+            defer {
+                worse_query_release(handle)
+                Thread.current.threadDictionary.removeObject(forKey: WQAccess.extensionScopeKey)
+            }
+            result.grantSucceeded = true
+            guard let after = try containerIdentity(at: candidate),
+                  before == nil || before == after else {
+                throw CCError.outsideWhitelist(candidate)
+            }
+            var identifierDiagnostic: NSString?
+            let grantedIdentifier = CCContainerIdentifierWithDiagnostic(candidate, &identifierDiagnostic)
+            if grantedIdentifier == nil && mappedIdentifier == nil { result.error = identifierDiagnostic as String? }
+            if let mappedIdentifier, let grantedIdentifier, mappedIdentifier != grantedIdentifier {
+                throw CCError.outsideWhitelist(candidate)
+            }
+            result.identifier = grantedIdentifier ?? mappedIdentifier
+            // Bind only the exact target to this directory identity. Other
+            // candidates never become eligible for normal cache access.
+            if result.identifier == WQWhitelist.carPlayWallpaperBundleID {
+                guard try containerIdentity(at: candidate) == after else {
+                    throw CCError.outsideWhitelist(candidate)
+                }
+                verifiedContainers[candidate] = after
+            }
+        } catch {
+            result.identifier = nil
+            result.error = error.localizedDescription
+        }
+        return result
+    }
+
+    private func containerIdentity(at path: String, allowDenied: Bool = false) throws -> ContainerIdentity? {
+        var info = stat()
+        guard lstat(path, &info) == 0 else {
+            let code = errno
+            if allowDenied && (code == EPERM || code == EACCES) { return nil }
+            throw NSError(domain: NSPOSIXErrorDomain, code: Int(code),
+                          userInfo: [NSLocalizedDescriptionKey: "Container lstat failed (errno \(code)): \(String(cString: strerror(code)))"])
+        }
+        guard (info.st_mode & UInt16(S_IFMT)) == UInt16(S_IFDIR) else {
+            throw CCError.outsideWhitelist(path)
+        }
+        return ContainerIdentity(device: info.st_dev, inode: info.st_ino)
+    }
+
+    /// Keeps a ContainerManager extension alive for the process lifetime.
     func retainContainerHandle(_ handle: Int64) {
+        accessLock.lock(); defer { accessLock.unlock() }
         guard handle >= 0, retainedHandle < 0 else {
             if handle >= 0 { worse_query_release(handle) }
             return
@@ -75,78 +170,83 @@ final class WQAccess {
         retainedHandle = handle
     }
 
-    /// Tries both flag sets and keeps whichever actually opens the target.
-    ///
-    /// A single fixed guess is not enough. iOS 26 prefers the alternate flags,
-    /// but a token can be issued and consumed and still fail to open the path
-    /// (WQFiles hit that on 27.0.1). `handle=-6` means the kernel refused to
-    /// issue an extension at all, which the other flag set can sometimes fix.
-    private func acquire(path: String, group: String) throws -> Int64 {
-        let order: [Bool]
-        if let known = WQAccess.preferredAltFlags {
-            order = [known, !known]
-        } else {
-            order = [true, false]
+    /// Tries both flag sets. A nonnegative handle is not success until open
+    /// really succeeds; ENOENT, EACCES and EPERM all remain failures.
+    private func acquire(path: String, group: String, directory: Bool = false) throws -> Int64 {
+        guard !WQAccess.hasActiveExtensionOnCurrentThread else {
+            throw NSError(domain: "CarCanvas.WQAccess", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "Nested CarPlay extension access."])
         }
-
-        var last: Int64 = -6
+        let order = preferredAltFlags.map { [$0, !$0] } ?? [true, false]
+        var lastHandle: Int64 = -6
+        var lastOpenError: Int32?
         for useAlt in order {
             CCLog.info("query: altFlags=\(useAlt) path=\(path)")
             let handle = worse_query(path, group, useAlt, true)
             CCLog.info("query handle=\(handle) (altFlags=\(useAlt))")
             if handle < 0 {
-                last = handle
+                lastHandle = handle
                 continue
             }
-            // A handle that does not open the path is useless.
-            if WQAccess.tokenOpens(path) {
-                WQAccess.preferredAltFlags = useAlt
-                return handle
+            if let code = tokenOpenError(path, directory: directory) {
+                lastOpenError = code
+                CCLog.error("token issued but open failed (errno \(code)); trying the other flags")
+                worse_query_release(handle)
+                continue
             }
-            CCLog.info("token did not open the target; trying the other flags")
-            worse_query_release(handle)
-            last = -6
+            preferredAltFlags = useAlt
+            return handle
         }
 
-        CCLog.error("both flag sets failed for \(path): \(last)")
-        throw CCError.accessFailed(last)
-    }
-
-    /// Whichever flag set last succeeded; nil until one does.
-    private static var preferredAltFlags: Bool?
-
-    /// Verifies the token really grants access instead of trusting the handle.
-    private static func tokenOpens(_ path: String) -> Bool {
-        let fd = open(path, O_RDONLY | O_NONBLOCK)
-        if fd >= 0 {
-            close(fd)
-            return true
+        if let code = lastOpenError {
+            CCLog.error("token access verification failed (open errno \(code))")
+            throw NSError(domain: NSPOSIXErrorDomain, code: Int(code),
+                          userInfo: [NSLocalizedDescriptionKey: "Token issued, but target open failed (errno \(code)): \(String(cString: strerror(code)))"])
         }
-        return errno != EPERM
+        CCLog.error("both flag sets returned no usable handle for \(path): \(lastHandle)")
+        throw CCError.accessFailed(lastHandle)
     }
 
-    /// Consumes a sandbox extension for a container that the scanner has
-    /// already identified as `com.apple.CarPlayWallpaper`.
-    ///
-    /// The identifier check is NOT repeated here: the metadata plist lives
-    /// outside our sandbox and is only reachable through the scanner's bounded
-    /// enumeration, so re-reading it at this point would always fail and reject
-    /// a perfectly valid container. The path whitelist is still enforced.
+    private func tokenOpenError(_ path: String, directory: Bool) -> Int32? {
+        let flags = O_RDONLY | O_NONBLOCK | O_NOFOLLOW | O_CLOEXEC | (directory ? O_DIRECTORY : 0)
+        let fd = open(path, flags)
+        guard fd >= 0 else { return errno }
+        close(fd)
+        return nil
+    }
+
     private func consume(containerPath: String) throws -> Int64 {
         let group = try requireAppGroup()
         guard WQWhitelist.isAllowedContainer(containerPath,
                                              identifier: WQWhitelist.carPlayWallpaperBundleID) else {
             throw CCError.outsideWhitelist(containerPath)
         }
-        return try acquire(path: containerPath, group: group)
+        return try acquire(path: containerPath, group: group, directory: true)
     }
 
-    /// The one scoped entry point. The closure runs while the extension is
-    /// consumed; the handle is released unconditionally afterwards.
+    /// Final access is available only after an exact CarPlay identity probe.
+    /// Revalidate the directory inode while the extension is active; a stale
+    /// cached path must never authorize a replacement container.
     func withAccess<T>(containerPath: String, _ body: () throws -> T) throws -> T {
+        accessLock.lock(); defer { accessLock.unlock() }
         try preflight()
-        let handle = try consume(containerPath: containerPath)
-        defer { worse_query_release(handle) }
+        guard let candidate = WQWhitelist.canonicalContainerPath(containerPath),
+              let expected = verifiedContainers[candidate] else {
+            throw CCError.outsideWhitelist(containerPath)
+        }
+        let handle = try consume(containerPath: candidate)
+        Thread.current.threadDictionary[WQAccess.extensionScopeKey] = true
+        defer {
+            worse_query_release(handle)
+            Thread.current.threadDictionary.removeObject(forKey: WQAccess.extensionScopeKey)
+        }
+        guard try containerIdentity(at: candidate) == expected else {
+            throw CCError.outsideWhitelist(candidate)
+        }
+        if let identifier = CCContainerIdentifier(candidate),
+           identifier != WQWhitelist.carPlayWallpaperBundleID {
+            throw CCError.outsideWhitelist(candidate)
+        }
         return try body()
     }
 }
