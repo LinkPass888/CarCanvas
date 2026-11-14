@@ -51,6 +51,7 @@
 "BROWSER_WORKSPACE_SUBTITLE" = "「このiPhone内」で利用できるファイル";
 "COMMON_CANCEL" = "キャンセル";
 "COMMON_ERROR" = "エラー";
+"COMMON_SUCCESS" = "成功しました";
 "COMMON_FAILED_TO_SAVE" = "設定の保存に失敗しました。";
 "COMMON_OK" = "OK";
 "COMMON_PLEASE_WAIT" = "しばらくお待ちください…";
@@ -72,7 +73,7 @@
 "HISTORY_DELETE" = "削除";
 "HISTORY_EMPTY" = "保存されたCPBitmapはまだありません。\n壁紙の作成や書き出しを行うとここに表示されます。";
 "HISTORY_EXPORT_CARPLAY" = "CarPlay Wallpaper に書き出し";
-"HISTORY_EXPORT_CARPLAY_DONE" = "%ld 件を上書きしました（失敗 %ld 件）。\n反映するには iPhone の電源を切って起動し直してください。";
+"HISTORY_EXPORT_CARPLAY_DONE" = "%ld 件を上書きしました（失敗 %ld 件）。\n変更を適用するにはログアウトしてください。";
 "HISTORY_EXPORT_CARPLAY_NO_FILES" = "CarPlay Wallpaper に上書きできるファイルがありません。";
 "HISTORY_EXPORT_CARPLAY_PICK_MESSAGE" = "ダーク / ライトを個別にタップして上書き先を選べます。片方だけでも、両方でも選べます。";
 "HISTORY_EXPORT_CARPLAY_PICK_TITLE" = "書き出し先を選択";
@@ -185,5 +186,13 @@
 "WALLPAPER_ADDED_TO_WALLPAPERS" = "壁紙に追加しました";
 "WALLPAPER_ORIGINAL" = "元の壁紙";
 "WALLPAPER_RESTORE" = "復元";
-"WALLPAPER_RESTORED" = "元の壁紙を復元しました";
+"WALLPAPER_RESTORED" = "壁紙のバックアップを復元しました。\n変更を適用するにはログアウトしてください。";
 "HISTORY_APPLIED" = "CarPlay に適用しました";
+"HISTORY_BACKUP_EMPTY" = "元の壁紙のバックアップはまだありません。キャッシュが見つかると保存されます。";
+"HISTORY_BACKUP_FIRST_SCAN" = "このキャッシュを初めてスキャンした際に保存しました。";
+"HISTORY_BACKUP_LEGACY" = "最も古い有効な旧バックアップ: %@。元の壁紙である保証はありません。";
+"HISTORY_BACKUP_RECOVERED" = "既存のバックアップを回収しました。保存元は不明で、元の壁紙である保証はありません。";
+"HISTORY_BACKUP_FAILED" = "元の壁紙を保存または検証できませんでした: %@。これらのキャッシュへの適用は拒否されます。セッションログを確認してください。";
+"HISTORY_BACKUP_TARGET_MISSING" = "%@ に一致する現在のキャッシュを一意に特定できません。復元は行われませんでした。";
+"HISTORY_BACKUP_VERIFY_FAILED" = "書き込み後のキャッシュの検証に失敗しました。";
+"HISTORY_BACKUP_ROLLBACK_FAILED" = "%@ ロールバックにも失敗しました。セッションログを確認してください。";

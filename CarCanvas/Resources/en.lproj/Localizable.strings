@@ -51,6 +51,7 @@
 "BROWSER_WORKSPACE_SUBTITLE" = "Files available in On My iPhone";
 "COMMON_CANCEL" = "Cancel";
 "COMMON_ERROR" = "Error";
+"COMMON_SUCCESS" = "Success";
 "COMMON_FAILED_TO_SAVE" = "Failed to save settings.";
 "COMMON_OK" = "OK";
 "COMMON_PLEASE_WAIT" = "Please wait…";
@@ -72,7 +73,7 @@
 "HISTORY_DELETE" = "Delete";
 "HISTORY_EMPTY" = "No saved CPBitmap files yet.\nCreate or export a wallpaper to see it here.";
 "HISTORY_EXPORT_CARPLAY" = "Export to CarPlay Wallpaper";
-"HISTORY_EXPORT_CARPLAY_DONE" = "Overwrote %ld item(s) (%ld failed).\nPower off and restart your iPhone to apply the change.";
+"HISTORY_EXPORT_CARPLAY_DONE" = "Overwrote %ld item(s) (%ld failed).\nLog out to apply changes.";
 "HISTORY_EXPORT_CARPLAY_NO_FILES" = "No files in CarPlay Wallpaper to overwrite.";
 "HISTORY_EXPORT_CARPLAY_PICK_MESSAGE" = "Tap Dark or Light to choose overwrite targets. You can select either or both.";
 "HISTORY_EXPORT_CARPLAY_PICK_TITLE" = "Choose Destination";
@@ -185,5 +186,13 @@
 "WALLPAPER_ADDED_TO_WALLPAPERS" = "Added to Wallpapers";
 "WALLPAPER_ORIGINAL" = "Original wallpaper";
 "WALLPAPER_RESTORE" = "Restore";
-"WALLPAPER_RESTORED" = "Original wallpaper restored";
+"WALLPAPER_RESTORED" = "Wallpaper backup restored.\nLog out to apply changes.";
 "HISTORY_APPLIED" = "Applied to CarPlay";
+"HISTORY_BACKUP_EMPTY" = "No original backups available yet. Backups are saved when cache files are found.";
+"HISTORY_BACKUP_FIRST_SCAN" = "Saved on the first scan of this cache file.";
+"HISTORY_BACKUP_LEGACY" = "Earliest valid legacy copy: %@. Not guaranteed to be the original wallpaper.";
+"HISTORY_BACKUP_RECOVERED" = "Recovered an existing backup. Its source is unknown; not guaranteed to be the original wallpaper.";
+"HISTORY_BACKUP_FAILED" = "Original backup could not be saved or verified for: %@. Apply is blocked for these cache files. See the session log.";
+"HISTORY_BACKUP_TARGET_MISSING" = "No unique current cache file matches %@. Nothing was restored.";
+"HISTORY_BACKUP_VERIFY_FAILED" = "Cache read-back verification failed.";
+"HISTORY_BACKUP_ROLLBACK_FAILED" = "%@ Rollback also failed. See the session log.";

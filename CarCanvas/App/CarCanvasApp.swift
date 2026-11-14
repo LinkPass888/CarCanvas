@@ -6,8 +6,14 @@ struct CarCanvasApp: App {
     @StateObject private var history = HistoryStore.shared
     @Environment(\.scenePhase) private var scenePhase
 
+    private static let startupScan = Task.detached(priority: .utility) {
+        do { _ = try ContainerResolver().resolve() }
+        catch { CCLog.error("startup cache scan failed: \(error.localizedDescription)") }
+    }
+
     init() {
         CCLog.startSession()
+        _ = Self.startupScan
     }
 
     var body: some Scene {

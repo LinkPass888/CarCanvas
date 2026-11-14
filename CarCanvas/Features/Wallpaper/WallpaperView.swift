@@ -18,7 +18,6 @@ struct WallpaperView: View {
     @State private var messageIsError = false
     @State private var isWorking = false
     @State private var hasLoadedOnce = false
-    @State private var backup: URL?
 
     var body: some View {
         Form {
@@ -41,21 +40,6 @@ struct WallpaperView: View {
                 Text(L("WALLPAPER_SECTION_PREVIEW"))
             } footer: {
                 Text(previewFooter)
-            }
-
-            // The untouched original, kept from the first overwrite, so an
-            // applied wallpaper can always be rolled back.
-            if let backup {
-                Section(L("WALLPAPER_ORIGINAL")) {
-                    HStack {
-                        Label(backup.lastPathComponent, systemImage: "clock.arrow.circlepath")
-                            .font(.footnote)
-                            .lineLimit(1)
-                        Spacer()
-                        Button(L("WALLPAPER_RESTORE")) { restoreOriginal(backup) }
-                            .buttonStyle(.bordered)
-                    }
-                }
             }
 
             // Name sits at the top of the actions section, label left / field right.
@@ -125,33 +109,6 @@ struct WallpaperView: View {
         return L("WALLPAPER_NO_DEVICES")
     }
 
-    private func restoreOriginal(_ backupURL: URL) {
-        isWorking = true
-        Task {
-            var outcome: String
-            var isError = false
-            do {
-                let targets = try await Task.detached(priority: .userInitiated) {
-                    try ContainerResolver().resolve().files
-                }.value
-                guard let target = targets.first(where: { backupURL.lastPathComponent.contains($0.fileName) })
-                        ?? targets.first else {
-                    throw CCError.noCacheFiles
-                }
-                try CacheWriter().restore(backup: backupURL, target: target)
-                outcome = L("WALLPAPER_RESTORED")
-            } catch let caught {
-                outcome = caught.localizedDescription
-                isError = true
-            }
-            await MainActor.run {
-                message = outcome
-                messageIsError = isError
-                isWorking = false
-            }
-        }
-    }
-
     @MainActor
     private func refresh(forceRefresh: Bool = false) async {
         preview.beginSearching()
@@ -161,7 +118,6 @@ struct WallpaperView: View {
             WallpaperPreviewStore.loadFromDevice(forceRefresh: forceRefresh)
         }.value
         preview.apply(loaded)
-        backup = HistoryStore.shared.backups().first
     }
 
     /// Shows the picked image in both slots as soon as it is chosen, so the

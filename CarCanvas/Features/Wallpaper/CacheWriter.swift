@@ -1,13 +1,12 @@
 import Foundation
-import Darwin
 
 /// The only code that writes outside this app's sandbox.
 ///
 /// Guarantees, in order:
 ///  1. fail-closed version gate + App Group check (via WQAccess)
 ///  2. re-resolve the container; validate every path against WQWhitelist
-///  3. back up the original to Documents/Backups (abort if backup fails)
-///  4. write atomically, verify byte count, roll back on mismatch
+///  3. require a verified, persisted original in Documents/Backups
+///  4. write atomically, verify contents, roll back on mismatch
 ///  5. release the sandbox extension in `defer`
 ///
 /// There is no silent path: `targets` must be explicitly provided by the UI
@@ -25,7 +24,8 @@ final class CacheWriter {
 
         let resolved = try ContainerResolver().resolve()
         let selected = targets.filter { t in
-            WQWhitelist.isAllowedCacheFile(t.path, in: resolved.cacheDirectory)
+            resolved.files.contains(where: { $0.path == t.path && $0.fileName == t.fileName })
+                && WQWhitelist.isAllowedCacheFile(t.path, in: resolved.cacheDirectory)
                 && ((t.isDark && dark) || (t.isLight && light))
         }
         guard !selected.isEmpty else { throw CCError.noCacheFiles }
@@ -53,18 +53,28 @@ final class CacheWriter {
         }
     }
 
-    /// Puts a backed-up original back over a cache file. This is how the
-    /// Wallpaper screen's "restore" undoes an overwrite.
-    func restore(backup: URL, target: WallpaperTarget) throws {
-        let resolved = try ContainerResolver().resolve()
-        guard WQWhitelist.isAllowedCacheFile(target.path, in: resolved.cacheDirectory) else {
-            throw CCError.outsideWhitelist(target.path)
-        }
-        guard let payload = try? Data(contentsOf: backup) else {
-            throw CCError.templateUnreadable(backup.lastPathComponent)
-        }
-        try WQAccess.shared.withAccess(containerPath: resolved.containerPath) {
-            try payload.write(to: URL(fileURLWithPath: target.path), options: .atomic)
+    /// Restore only the exact current cache filename recorded with this copy.
+    /// Resolution ends before acquiring the write scope; there is no nested grant.
+    func restore(backup: HistoryStore.OriginalBackup) throws {
+        do {
+            let resolved = try ContainerResolver().resolve()
+            let matches = resolved.files.filter { $0.fileName == backup.cacheFileName }
+            guard matches.count == 1 else {
+                throw NSError(domain: "CarCanvas.CacheWriter", code: 1,
+                              userInfo: [NSLocalizedDescriptionKey: LF("HISTORY_BACKUP_TARGET_MISSING", backup.cacheFileName)])
+            }
+            let target = matches[0]
+            guard WQWhitelist.isAllowedCacheFile(target.path, in: resolved.cacheDirectory) else {
+                throw CCError.outsideWhitelist(target.path)
+            }
+            let payload = try history.backupData(for: backup)
+            try WQAccess.shared.withAccess(containerPath: resolved.containerPath) {
+                let current = try Data(contentsOf: URL(fileURLWithPath: target.path))
+                try writeVerified(payload, to: target, rollback: current)
+            }
+        } catch {
+            CCLog.error("restore failed for \(backup.cacheFileName): \(error.localizedDescription)")
+            throw error
         }
     }
 
@@ -74,27 +84,32 @@ final class CacheWriter {
     }
 
     private func writeOne(_ payload: Data, to target: WallpaperTarget) throws {
-        let url = URL(fileURLWithPath: target.path)
-        guard let original = try? Data(contentsOf: url, options: [.mappedIfSafe]) else {
-            throw CCError.templateUnreadable(target.fileName)
-        }
-        let backupName = "\(Date().timeIntervalSince1970)-\(target.fileName)"
-        let backupURL = history.backupsDirectory.appendingPathComponent(backupName)
-        do {
-            try original.write(to: backupURL, options: .atomic)
-        } catch { throw CCError.backupFailed }
+        // Existing originals are validated, never refreshed from a custom cache.
+        try history.ensureOriginal(for: target)
+        let current = try Data(contentsOf: URL(fileURLWithPath: target.path))
+        try writeVerified(payload, to: target, rollback: current)
+    }
 
+    private func writeVerified(_ payload: Data, to target: WallpaperTarget, rollback current: Data) throws {
+        let url = URL(fileURLWithPath: target.path)
         do {
             try payload.write(to: url, options: .atomic)
+            guard try Data(contentsOf: url) == payload else {
+                throw NSError(domain: "CarCanvas.CacheWriter", code: 2,
+                              userInfo: [NSLocalizedDescriptionKey: L("HISTORY_BACKUP_VERIFY_FAILED")])
+            }
         } catch {
-            try? original.write(to: url, options: .atomic)
+            do {
+                try current.write(to: url, options: .atomic)
+                guard try Data(contentsOf: url) == current else {
+                    throw CCError.verificationFailed
+                }
+            } catch let rollbackError {
+                CCLog.error("rollback failed for \(target.fileName): \(rollbackError.localizedDescription)")
+                throw NSError(domain: "CarCanvas.CacheWriter", code: 3,
+                              userInfo: [NSLocalizedDescriptionKey: LF("HISTORY_BACKUP_ROLLBACK_FAILED", error.localizedDescription)])
+            }
             throw error
-        }
-
-        var st = stat()
-        guard lstat(target.path, &st) == 0, Int(st.st_size) == payload.count else {
-            try? original.write(to: url, options: .atomic)
-            throw CCError.verificationFailed
         }
     }
 }

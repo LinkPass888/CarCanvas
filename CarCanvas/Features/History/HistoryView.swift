@@ -3,13 +3,45 @@ import SwiftUI
 struct HistoryView: View {
     @EnvironmentObject private var history: HistoryStore
     @State private var banner: String?
+    @State private var bannerIsError = false
     @State private var applyingID: HistoryEntry.ID?
+    @State private var restoringFileName: String?
     @State private var showRespringConfirm = false
     @State private var isRespringing = false
 
     var body: some View {
         List {
             Section { StatusBanner() }
+            Section(L("WALLPAPER_ORIGINAL")) {
+                if history.originalBackups.isEmpty {
+                    Text(L("HISTORY_BACKUP_EMPTY")).foregroundStyle(.secondary)
+                }
+                ForEach(history.originalBackups) { backup in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(backup.cacheFileName).font(.headline)
+                        Text(backup.createdAt.formatted()).font(.caption).foregroundStyle(.secondary)
+                        Text(backupSourceLabel(backup)).font(.caption).foregroundStyle(.secondary)
+                        HStack {
+                            Spacer()
+                            Button {
+                                restoreOriginal(backup)
+                            } label: {
+                                if restoringFileName == backup.cacheFileName {
+                                    ProgressView().controlSize(.small)
+                                } else {
+                                    Text(L("WALLPAPER_RESTORE"))
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(applyingID != nil || restoringFileName != nil)
+                        }
+                    }
+                }
+                if !history.backupFailures.isEmpty {
+                    Text(LF("HISTORY_BACKUP_FAILED", history.backupFailures.joined(separator: ", ")))
+                        .font(.caption).foregroundStyle(.red)
+                }
+            }
             if history.entries.isEmpty {
                 Text(L("HISTORY_EMPTY")).foregroundStyle(.secondary)
             } else {
@@ -40,7 +72,7 @@ struct HistoryView: View {
                                 }
                             }
                             .buttonStyle(.borderedProminent)
-                            .disabled(applyingID != nil)
+                            .disabled(applyingID != nil || restoringFileName != nil)
                         }
                         .font(.footnote)
                     }
@@ -64,7 +96,8 @@ struct HistoryView: View {
             Text(L("SETTINGS_LOGOUT_CONFIRM_MESSAGE"))
         }
         .fullScreenCover(isPresented: $isRespringing) { NeoSpringOverlay() }
-        .alert(L("COMMON_ERROR"), isPresented: Binding(get: { banner != nil }, set: { if !$0 { banner = nil } })) {
+        .alert(bannerIsError ? L("COMMON_ERROR") : L("COMMON_SUCCESS"),
+               isPresented: Binding(get: { banner != nil }, set: { if !$0 { banner = nil } })) {
             Button(L("COMMON_OK")) { banner = nil }
         } message: { Text(banner ?? "") }
     }
@@ -77,22 +110,56 @@ struct HistoryView: View {
         applyingID = entry.id
         Task {
             var outcome: String
+            var isError = false
             do {
-                outcome = try await Task.detached(priority: .userInitiated) {
+                let result = try await Task.detached(priority: .userInitiated) {
                     let targets = try ContainerResolver().resolve().files
-                    let result = try CacheWriter().overwrite(entry: entry,
-                                                            targets: targets,
-                                                            dark: entry.darkFileName != nil,
-                                                            light: entry.lightFileName != nil)
-                    return LF("HISTORY_EXPORT_CARPLAY_DONE", result.succeeded, result.failed)
+                    return try CacheWriter().overwrite(entry: entry,
+                                                       targets: targets,
+                                                       dark: entry.darkFileName != nil,
+                                                       light: entry.lightFileName != nil)
                 }.value
+                outcome = LF("HISTORY_EXPORT_CARPLAY_DONE", result.succeeded, result.failed)
+                isError = result.failed > 0 || result.succeeded == 0
             } catch let caught {
                 outcome = caught.localizedDescription
+                isError = true
             }
             await MainActor.run {
+                bannerIsError = isError
                 banner = outcome
                 applyingID = nil
             }
+        }
+    }
+
+    private func restoreOriginal(_ backup: HistoryStore.OriginalBackup) {
+        restoringFileName = backup.cacheFileName
+        Task {
+            var outcome: String
+            var isError = false
+            do {
+                try await Task.detached(priority: .userInitiated) {
+                    try CacheWriter().restore(backup: backup)
+                }.value
+                outcome = L("WALLPAPER_RESTORED")
+            } catch let caught {
+                outcome = caught.localizedDescription
+                isError = true
+            }
+            await MainActor.run {
+                bannerIsError = isError
+                banner = outcome
+                restoringFileName = nil
+            }
+        }
+    }
+
+    private func backupSourceLabel(_ backup: HistoryStore.OriginalBackup) -> String {
+        switch backup.source {
+        case .firstScan: return L("HISTORY_BACKUP_FIRST_SCAN")
+        case .legacy: return LF("HISTORY_BACKUP_LEGACY", backup.sourceFileName ?? backup.backupFileName)
+        case .recovered: return L("HISTORY_BACKUP_RECOVERED")
         }
     }
 

@@ -51,6 +51,7 @@
 "BROWSER_WORKSPACE_SUBTITLE" = "可在“我的 iPhone”中访问的文件";
 "COMMON_CANCEL" = "取消";
 "COMMON_ERROR" = "错误";
+"COMMON_SUCCESS" = "成功";
 "COMMON_FAILED_TO_SAVE" = "保存设置失败。";
 "COMMON_OK" = "OK";
 "COMMON_PLEASE_WAIT" = "请稍候…";
@@ -72,7 +73,7 @@
 "HISTORY_DELETE" = "删除";
 "HISTORY_EMPTY" = "尚无已保存的 CPBitmap 文件。\n创建或导出壁纸后，即可在此处看到。";
 "HISTORY_EXPORT_CARPLAY" = "导出到 CarPlay Wallpaper";
-"HISTORY_EXPORT_CARPLAY_DONE" = "已覆盖 %ld 个项目（失败 %ld 个）。\n请关机并重新启动 iPhone 以应用更改。";
+"HISTORY_EXPORT_CARPLAY_DONE" = "已覆盖 %ld 个项目（失败 %ld 个）。\n注销以应用更改。";
 "HISTORY_EXPORT_CARPLAY_NO_FILES" = "CarPlay Wallpaper 中没有可覆盖的文件。";
 "HISTORY_EXPORT_CARPLAY_PICK_MESSAGE" = "点按“深色”或“浅色”选择覆盖目标。你可以选择其中一个或两者都选。";
 "HISTORY_EXPORT_CARPLAY_PICK_TITLE" = "选择目标";
@@ -185,5 +186,13 @@
 "WALLPAPER_ADDED_TO_WALLPAPERS" = "已添加到壁纸";
 "WALLPAPER_ORIGINAL" = "原始壁纸";
 "WALLPAPER_RESTORE" = "恢复";
-"WALLPAPER_RESTORED" = "已恢复原始壁纸";
+"WALLPAPER_RESTORED" = "已恢复备份壁纸。\n注销以应用更改。";
 "HISTORY_APPLIED" = "已应用到 CarPlay";
+"HISTORY_BACKUP_EMPTY" = "暂无原件备份，扫描到缓存文件后会自动保存。";
+"HISTORY_BACKUP_FIRST_SCAN" = "此缓存文件首次扫描时保存。";
+"HISTORY_BACKUP_LEGACY" = "最早有效旧副本：%@。不保证是原版壁纸。";
+"HISTORY_BACKUP_RECOVERED" = "从已有备份恢复索引，来源不明，不保证是原版壁纸。";
+"HISTORY_BACKUP_FAILED" = "以下缓存的原件无法保存或校验：%@。已禁止对这些文件应用壁纸，请查看会话日志。";
+"HISTORY_BACKUP_TARGET_MISSING" = "当前缓存中无法唯一匹配 %@，未恢复任何文件。";
+"HISTORY_BACKUP_VERIFY_FAILED" = "缓存写入后的读回校验失败。";
+"HISTORY_BACKUP_ROLLBACK_FAILED" = "%@ 回滚也失败了，请查看会话日志。";

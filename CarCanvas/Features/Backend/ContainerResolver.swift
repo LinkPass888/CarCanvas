@@ -204,7 +204,9 @@ final class ContainerResolver {
                 // the same container, so look one level up before giving up.
                 if let fallback = Self.locateWallpaperImages(inContainer: container) {
                     CCLog.info("cache directory fallback: \(fallback)")
-                    return Self.cacheFiles(in: fallback)
+                    let targets = Self.cacheFiles(in: fallback)
+                    HistoryStore.shared.backUpMissingOriginals(targets)
+                    return targets
                 }
                 CCLog.error("cache directory unreadable: \(cacheDirectory)")
                 throw CCError.cacheNotFound
@@ -221,6 +223,7 @@ final class ContainerResolver {
                                                appearance: WQWhitelist.appearance(of: name),
                                                byteCount: Int(st.st_size)))
             }
+            HistoryStore.shared.backUpMissingOriginals(targets)
             return targets
         }
         CCLog.info("cache files accepted: \(files.count) (route: \(route))")
