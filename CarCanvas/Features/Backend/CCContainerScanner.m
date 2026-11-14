@@ -46,10 +46,11 @@ static NSString *CCIdentifierFromXattr(NSString *path)
         if (value.length == 0) continue;
 
         NSCharacterSet *ignored = [NSCharacterSet whitespaceAndNewlineCharacterSet];
-        // The identity xattr is a small plist-ish block; the identifier one is
-        // often just the bundle id. Handle both.
-        for (NSString *line in [value componentsSeparatedByString:@"
-"]) {
+        // The identity xattr is a small block that can list several fields;
+        // the identifier one is usually just the bundle id. Split on a real
+        // newline built from its code point so no escaping layer can break it.
+        NSString *newline = [NSString stringWithFormat:@"%C", (unichar)10];
+        for (NSString *line in [value componentsSeparatedByString:newline]) {
             NSString *text = [line stringByTrimmingCharactersInSet:ignored];
             if ([text hasPrefix:@"identifier:"]) {
                 NSString *identifier = [[text substringFromIndex:11]
@@ -58,8 +59,9 @@ static NSString *CCIdentifierFromXattr(NSString *path)
             }
         }
         NSString *flat = [value stringByTrimmingCharactersInSet:ignored];
-        if (flat.length && ![flat containsString:@":"] && ![flat containsString:@"
-"]) {
+        BOOL hasColon = [flat containsString:@":"];
+        BOOL multiline = [flat containsString:newline];
+        if (flat.length && !hasColon && !multiline) {
             return flat;
         }
     }

@@ -365,6 +365,22 @@ if pm.is_file():
 
 
 print()
+print("== 6b. Objective-C source integrity ==")
+    # Guard against a real newline being written inside an ObjC literal.
+    # This has broken the build twice (a split @"..." string).
+objc_files = [f for f in iter_repo_files() if f.suffix in (".m", ".h")]
+broken = []
+for f in objc_files:
+    lines = f.read_text(encoding="utf-8", errors="replace").splitlines()
+    for i, line in enumerate(lines):
+        stripped = line.rstrip()
+        if stripped.endswith('@"') or stripped.endswith('"') and stripped.count('"') % 2 == 1:
+            broken.append("%s:%d" % (rel(f), i + 1))
+check(not broken,
+      "%d Objective-C files have balanced quotes" % len(objc_files),
+      "unbalanced quote (likely a newline inside a literal): " + ", ".join(broken[:6]))
+
+print()
 print("== 7. Objective-C bridging header ==")
 bh = ROOT / "CarCanvas" / "CarCanvas-Bridging-Header.h"
 if check(bh.is_file(), "bridging header exists", "bridging header missing"):
