@@ -114,6 +114,11 @@ python3 scripts/verify-repository.py
 
 ## 10. 许可证与致谢
 
+本仓库维护者的联系与支持入口：
+
+- Telegram 频道：[t.me/linkpass666](https://t.me/linkpass666)
+- 爱发电：[afdian.com/a/linkpass](https://afdian.com/a/linkpass)
+
 本项目因使用 `worse_query`（`GPL-3.0-or-later`）而以 `GPL-3.0-or-later` 发布。GPL-3.0 全文见 [LICENSE](LICENSE)，vendored 组件说明见 [THIRD_PARTY_LICENSES/](THIRD_PARTY_LICENSES/README.md)。
 
 致谢：

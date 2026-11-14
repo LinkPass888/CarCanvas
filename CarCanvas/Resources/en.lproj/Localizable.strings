@@ -97,15 +97,9 @@
 "ROOT_WALLPAPER" = "Wallpaper";
 "ROOT_WALLPAPER_SUBTITLE" = "Apply images or create local CPBitmap files";
 "SETTINGS_ABOUT_DETAIL" = "CarPlay wallpaper cache utility";
-"SETTINGS_CARPLAY_WORKS" = "CarPlay Tweaks";
-"SETTINGS_CARPLAY_WORKS_FOOTER" = "Tap an item to open its product page. Full list: https://dcsyhi1998.github.io/";
-"SETTINGS_CARPLAY_WORKS_HUB" = "Open product site";
-"SETTINGS_CARPLAY_WORKS_HUB_SUBTITLE" = "dcsyhi1998.github.io";
-"SETTINGS_CARPLAY_WORKS_SUBTITLE" = "Airaw and other CarPlay packages by the author";
-"SETTINGS_CARPLAY_WORKS_TITLE" = "CarPlay Tweaks";
 "SETTINGS_CREDITS_FOOTER" = "CarCanvas needs an App Group and uses worse_query by forcequitOS for container access.";
 "SETTINGS_DONATE" = "Donate";
-"SETTINGS_DONATE_SUBTITLE" = "Support development";
+"SETTINGS_DONATE_SUBTITLE" = "Support development on Afdian";
 "SETTINGS_FILZASLOP_SUBTITLE" = "worse_query and related sandbox research";
 "SETTINGS_FOOTER" = "© Dcsyhi 2022–%@ CarCanvas v1.5\\nBased on worse_query by forcequitOS";
 "SETTINGS_GUIDE" = "Setup Guide";
@@ -115,14 +109,6 @@
 "SETTINGS_SECTION_DEVELOPER" = "Developer";
 "SETTINGS_SECTION_GUIDE" = "Guide";
 "SETTINGS_TITLE" = "Settings";
-"SETTINGS_TWITTER_SUBTITLE" = "Follow on Twitter";
-"SETTINGS_WORK_AIRAW" = "CarPlay platform - layout, wallpaper, widgets, and more";
-"SETTINGS_WORK_CARCAST" = "Pin non-CarPlay apps to the dashboard (requires Airaw)";
-"SETTINGS_WORK_CARGLYPH" = "Apply IconBundles themes to CarPlay icons";
-"SETTINGS_WORK_CYLINDER" = "Page-turn effects on the CarPlay home screen";
-"SETTINGS_WORK_SPLIT_NATIVE" = "Split View for native CarPlay apps (iOS 16+)";
-"SETTINGS_WORK_SPLIT_STANDARD" = "Split View for CarCast / CarBridge apps (iOS 16+)";
-"SETTINGS_WORK_ZETSU" = "Multitasking for iOS 14";
 "WALLPAPER_APPLY_AND_EXPORT" = "Apply and export";
 "WALLPAPER_APPLY_CARPLAY" = "Apply to CarPlay";
 "WALLPAPER_CACHE_NOT_FOUND" = "CarPlayWallpaper container / wallpaper cache not found.\nOpen CarPlay once, then retry in CarCanvas.";
@@ -172,3 +158,5 @@
 "HISTORY_ENTRY_DETAIL" = "%@ - %@";
 "SETTINGS_FILZASLOP_TITLE" = "Special thanks to forcequitOS";
 "WALLPAPER_SECTION_PREVIEW" = "Wallpaper Preview";
+"SETTINGS_CHANNEL_TELEGRAM" = "Telegram channel";
+"SETTINGS_CHANNEL_TELEGRAM_SUBTITLE" = "Subscribe for updates";

@@ -12,17 +12,6 @@ struct SettingsView: View {
 
     private var entitledGroups: [String] { WQAccess.shared.entitledGroups }
 
-    /// The CarPlay Tweaks entries the original screen listed.
-    private let works: [(String, String)] = [
-        ("airAW", "SETTINGS_WORK_AIRAW"),
-        ("CarCast", "SETTINGS_WORK_CARCAST"),
-        ("CarGlyph", "SETTINGS_WORK_CARGLYPH"),
-        ("Cylinder", "SETTINGS_WORK_CYLINDER"),
-        ("SplitView (native)", "SETTINGS_WORK_SPLIT_NATIVE"),
-        ("SplitView (standard)", "SETTINGS_WORK_SPLIT_STANDARD"),
-        ("Zetsu", "SETTINGS_WORK_ZETSU")
-    ]
-
     var body: some View {
         Form {
             Section(L("SETTINGS_SECTION_GUIDE")) {
@@ -40,23 +29,12 @@ struct SettingsView: View {
             }
 
             Section(L("SETTINGS_SECTION_DEVELOPER")) {
-                Text(L("SETTINGS_CARPLAY_WORKS_TITLE")).font(.headline)
-                Text(L("SETTINGS_CARPLAY_WORKS_SUBTITLE"))
+                Link(L("SETTINGS_CHANNEL_TELEGRAM"),
+                     destination: URL(string: "https://t.me/linkpass666")!)
+                Text(L("SETTINGS_CHANNEL_TELEGRAM_SUBTITLE"))
                     .font(.caption).foregroundStyle(.secondary)
-                ForEach(works, id: \.0) { item in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(item.0).font(.body)
-                        Text(L(item.1)).font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-                Link(L("SETTINGS_CARPLAY_WORKS_HUB"),
-                     destination: URL(string: "https://dcsyhi1998.github.io/")!)
-                Text(L("SETTINGS_CARPLAY_WORKS_FOOTER"))
-                    .font(.caption2).foregroundStyle(.secondary)
-                Link(L("SETTINGS_TWITTER_SUBTITLE"),
-                     destination: URL(string: "https://x.com/Dcsyhi1998")!)
                 Link(L("SETTINGS_DONATE"),
-                     destination: URL(string: "https://dcsyhi1998.github.io/")!)
+                     destination: URL(string: "https://afdian.com/a/linkpass")!)
                 Text(L("SETTINGS_DONATE_SUBTITLE"))
                     .font(.caption).foregroundStyle(.secondary)
             }

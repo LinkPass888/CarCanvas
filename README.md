@@ -113,6 +113,11 @@ The UI ships three localizations — `en`, `ja` and `zh-Hans` — as `.strings` 
 
 ## 10. License and credits
 
+Maintainer contact and support:
+
+- Telegram channel: [t.me/linkpass666](https://t.me/linkpass666)
+- Afdian: [afdian.com/a/linkpass](https://afdian.com/a/linkpass)
+
 Because this project uses `worse_query` (`GPL-3.0-or-later`), the whole project is released under `GPL-3.0-or-later`. See [LICENSE](LICENSE) for the full GPL-3.0 text and [THIRD_PARTY_LICENSES/](THIRD_PARTY_LICENSES/README.md) for the vendored component.
 
 Credits:

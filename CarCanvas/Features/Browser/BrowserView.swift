@@ -15,7 +15,7 @@ struct BrowserView: View {
     @State private var items: [WorkspaceFile] = []
     @State private var searchText = ""
     @State private var isLoading = false
-    @State private var error: String?
+    @State private var alertMessage: String?
     @State private var showNewFolder = false
     @State private var showNewFile = false
     @State private var newName = ""
@@ -41,9 +41,9 @@ struct BrowserView: View {
         .task { reload() }
         .refreshable { reload() }
         .alert(L("COMMON_ERROR"), isPresented: Binding(
-            get: { error != nil }, set: { if !$0 { error = nil } })) {
-            Button(L("COMMON_OK")) { error = nil }
-        } message: { Text(error ?? "") }
+            get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })) {
+            Button(L("COMMON_OK")) { alertMessage = nil }
+        } message: { Text(alertMessage ?? "") }
         .alert(L("BROWSER_IMPORT_CONFLICT_TITLE"), isPresented: Binding(
             get: { importConflict != nil }, set: { if !$0 { importConflict = nil } })) {
             Button(L("BROWSER_KEEP_BOTH")) { resolveImport(keepBoth: true) }
@@ -210,7 +210,7 @@ struct BrowserView: View {
             items = try Workspace.list(currentDirectory)
         } catch {
             items = []
-            self.error = error.localizedDescription
+            alertMessage = error.localizedDescription
         }
         isLoading = false
     }
@@ -224,7 +224,7 @@ struct BrowserView: View {
                                                     withIntermediateDirectories: false)
             reload()
         } catch {
-            error = (error as? CCError)?.localizedDescription ?? L("BROWSER_ERROR_CREATE")
+            alertMessage = (error as? CCError)?.localizedDescription ?? L("BROWSER_ERROR_CREATE")
         }
     }
 
@@ -236,7 +236,7 @@ struct BrowserView: View {
             try Data().write(to: url)
             reload()
         } catch {
-            error = (error as? CCError)?.localizedDescription ?? L("BROWSER_ERROR_CREATE")
+            alertMessage = (error as? CCError)?.localizedDescription ?? L("BROWSER_ERROR_CREATE")
         }
     }
 
@@ -257,7 +257,7 @@ struct BrowserView: View {
             try FileManager.default.moveItem(at: target.url, to: destination)
             reload()
         } catch {
-            error = (error as? CCError)?.localizedDescription ?? L("BROWSER_ERROR_RENAME")
+            alertMessage = (error as? CCError)?.localizedDescription ?? L("BROWSER_ERROR_RENAME")
         }
     }
 
@@ -266,7 +266,7 @@ struct BrowserView: View {
         do {
             try FileManager.default.removeItem(at: target.url)
             reload()
-        } catch { error = L("BROWSER_ERROR_DELETE") }
+        } catch { alertMessage = L("BROWSER_ERROR_DELETE") }
     }
 
     private func duplicate(_ item: WorkspaceFile) {
@@ -274,7 +274,7 @@ struct BrowserView: View {
             let destination = Workspace.uniqueURL(in: currentDirectory, preferredName: item.name)
             try FileManager.default.copyItem(at: item.url, to: destination)
             reload()
-        } catch { error = L("BROWSER_ERROR_CREATE") }
+        } catch { alertMessage = L("BROWSER_ERROR_CREATE") }
     }
 
     private func copyPath(_ item: WorkspaceFile) {
@@ -291,7 +291,7 @@ struct BrowserView: View {
     private func handleImport(_ result: Result<[URL], Error>) {
         switch result {
         case .failure:
-            error = L("BROWSER_ERROR_SOURCE_MISSING")
+            alertMessage = L("BROWSER_ERROR_SOURCE_MISSING")
         case .success(let urls):
             guard let first = urls.first else { return }
             let destination = currentDirectory.appendingPathComponent(first.lastPathComponent)
@@ -333,7 +333,7 @@ struct BrowserView: View {
             }
             try FileManager.default.copyItem(at: source, to: destination)
         } catch {
-            self.error = L("BROWSER_ERROR_IMPORT")
+            alertMessage = L("BROWSER_ERROR_IMPORT")
         }
         if reloadAfter { reload() }
     }
@@ -383,7 +383,7 @@ struct ContainerBrowserView: View {
     let entry: AppContainerStore.Entry?
     @ObservedObject var store: AppContainerStore
     @State private var files: [WorkspaceFile] = []
-    @State private var error: String?
+    @State private var alertMessage: String?
     @State private var isLoading = false
 
     var body: some View {
@@ -403,9 +403,9 @@ struct ContainerBrowserView: View {
         .navigationTitle(navigationTitle)
         .task { await load() }
         .alert(L("COMMON_ERROR"), isPresented: Binding(
-            get: { error != nil }, set: { if !$0 { error = nil } })) {
-            Button(L("COMMON_OK")) { error = nil }
-        } message: { Text(error ?? "") }
+            get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })) {
+            Button(L("COMMON_OK")) { alertMessage = nil }
+        } message: { Text(alertMessage ?? "") }
     }
 
     @ViewBuilder
@@ -461,7 +461,7 @@ struct ContainerBrowserView: View {
             }
         }.value
         files = outcome.0
-        error = outcome.1
+        alertMessage = outcome.1
         isLoading = false
     }
 }

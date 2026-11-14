@@ -97,15 +97,9 @@
 "ROOT_WALLPAPER" = "壁纸";
 "ROOT_WALLPAPER_SUBTITLE" = "应用图像或创建本地 CPBitmap 文件";
 "SETTINGS_ABOUT_DETAIL" = "CarPlay 壁纸缓存工具";
-"SETTINGS_CARPLAY_WORKS" = "CarPlay Tweaks";
-"SETTINGS_CARPLAY_WORKS_FOOTER" = "点按项目可打开其产品页面。完整列表：https://dcsyhi1998.github.io/";
-"SETTINGS_CARPLAY_WORKS_HUB" = "打开产品网站";
-"SETTINGS_CARPLAY_WORKS_HUB_SUBTITLE" = "dcsyhi1998.github.io";
-"SETTINGS_CARPLAY_WORKS_SUBTITLE" = "作者开发的 Airaw 等 CarPlay 软件包";
-"SETTINGS_CARPLAY_WORKS_TITLE" = "CarPlay Tweaks";
 "SETTINGS_CREDITS_FOOTER" = "CarCanvas 需要 App Group，并使用 forcequitOS 的 worse_query 进行容器访问。";
 "SETTINGS_DONATE" = "捐赠";
-"SETTINGS_DONATE_SUBTITLE" = "支持开发";
+"SETTINGS_DONATE_SUBTITLE" = "在爱发电支持开发";
 "SETTINGS_FILZASLOP_SUBTITLE" = "worse_query 及相关沙盒研究";
 "SETTINGS_FOOTER" = "© Dcsyhi 2022–%@ CarCanvas v1.5\\n基于 forcequitOS 的 worse_query";
 "SETTINGS_GUIDE" = "设置指南";
@@ -115,14 +109,6 @@
 "SETTINGS_SECTION_DEVELOPER" = "开发者";
 "SETTINGS_SECTION_GUIDE" = "指南";
 "SETTINGS_TITLE" = "设置";
-"SETTINGS_TWITTER_SUBTITLE" = "在 Twitter 上关注";
-"SETTINGS_WORK_AIRAW" = "CarPlay 平台 — 布局、壁纸、小组件等";
-"SETTINGS_WORK_CARCAST" = "将非 CarPlay 应用固定到仪表盘（需要 Airaw）";
-"SETTINGS_WORK_CARGLYPH" = "将 IconBundles 主题应用到 CarPlay 图标";
-"SETTINGS_WORK_CYLINDER" = "CarPlay 主屏幕的翻页效果";
-"SETTINGS_WORK_SPLIT_NATIVE" = "原生 CarPlay 应用的分屏视图（iOS 16+）";
-"SETTINGS_WORK_SPLIT_STANDARD" = "CarCast / CarBridge 应用的分屏视图（iOS 16+）";
-"SETTINGS_WORK_ZETSU" = "iOS 14 的多任务";
 "WALLPAPER_APPLY_AND_EXPORT" = "应用并导出";
 "WALLPAPER_APPLY_CARPLAY" = "应用到 CarPlay";
 "WALLPAPER_CACHE_NOT_FOUND" = "未找到 CarPlayWallpaper 容器 / 壁纸缓存。\n请先打开一次 CarPlay，然后在 CarCanvas 中重试。";
@@ -172,3 +158,5 @@
 "HISTORY_ENTRY_DETAIL" = "%@ - %@";
 "SETTINGS_FILZASLOP_TITLE" = "特别感谢 forcequitOS";
 "WALLPAPER_SECTION_PREVIEW" = "壁纸预览";
+"SETTINGS_CHANNEL_TELEGRAM" = "Telegram 频道";
+"SETTINGS_CHANNEL_TELEGRAM_SUBTITLE" = "订阅获取更新";

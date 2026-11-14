@@ -97,15 +97,9 @@
 "ROOT_WALLPAPER" = "壁紙";
 "ROOT_WALLPAPER_SUBTITLE" = "画像の適用やローカルCPBitmapの作成";
 "SETTINGS_ABOUT_DETAIL" = "CarPlay 壁紙キャッシュ用ユーティリティ";
-"SETTINGS_CARPLAY_WORKS" = "作成してきた CarPlay Tweak";
-"SETTINGS_CARPLAY_WORKS_FOOTER" = "各項目をタップすると製品ページを開きます。一覧サイト: https://dcsyhi1998.github.io/";
-"SETTINGS_CARPLAY_WORKS_HUB" = "製品サイトを開く";
-"SETTINGS_CARPLAY_WORKS_HUB_SUBTITLE" = "dcsyhi1998.github.io";
-"SETTINGS_CARPLAY_WORKS_SUBTITLE" = "Airaw など、作者の CarPlay 向け作品一覧";
-"SETTINGS_CARPLAY_WORKS_TITLE" = "CarPlay Tweaks";
 "SETTINGS_CREDITS_FOOTER" = "CarCanvas は App Group が必要で、コンテナアクセスに forcequitOS の worse_query を使用します。";
 "SETTINGS_DONATE" = "寄付";
-"SETTINGS_DONATE_SUBTITLE" = "開発支援";
+"SETTINGS_DONATE_SUBTITLE" = "Afdian で開発を支援";
 "SETTINGS_FILZASLOP_SUBTITLE" = "worse_query と関連するサンドボックス研究";
 "SETTINGS_FOOTER" = "© Dcsyhi 2022–%@ CarCanvas v1.5\\nforcequitOS の worse_query を使用";
 "SETTINGS_GUIDE" = "セットアップ手順";
@@ -115,14 +109,6 @@
 "SETTINGS_SECTION_DEVELOPER" = "開発者";
 "SETTINGS_SECTION_GUIDE" = "ガイド";
 "SETTINGS_TITLE" = "設定";
-"SETTINGS_TWITTER_SUBTITLE" = "Twitterをフォロー";
-"SETTINGS_WORK_AIRAW" = "CarPlay プラットフォーム — レイアウト、壁紙、ウィジェットなど";
-"SETTINGS_WORK_CARCAST" = "CarPlay 非対応アプリをダッシュボードに追加（Airaw が必要）";
-"SETTINGS_WORK_CARGLYPH" = "IconBundles テーマを CarPlay アイコンに適用";
-"SETTINGS_WORK_CYLINDER" = "CarPlay ホームのページめくり演出";
-"SETTINGS_WORK_SPLIT_NATIVE" = "純正 CarPlay アプリ向け Split View（iOS 16+）";
-"SETTINGS_WORK_SPLIT_STANDARD" = "CarCast / CarBridge 向け Split View（iOS 16+）";
-"SETTINGS_WORK_ZETSU" = "iOS 14 向けマルチタスク";
 "WALLPAPER_APPLY_AND_EXPORT" = "適用して書き出し";
 "WALLPAPER_APPLY_CARPLAY" = "CarPlayに適用";
 "WALLPAPER_CACHE_NOT_FOUND" = "CarPlayWallpaper のコンテナ／壁紙キャッシュが見つかりません。\n一度 CarPlay を開いてから、CarCanvas で再試行してください。";
@@ -172,3 +158,5 @@
 "HISTORY_ENTRY_DETAIL" = "%@ - %@";
 "SETTINGS_FILZASLOP_TITLE" = "特別感謝: forcequitOS";
 "WALLPAPER_SECTION_PREVIEW" = "壁紙プレビュー";
+"SETTINGS_CHANNEL_TELEGRAM" = "Telegram チャンネル";
+"SETTINGS_CHANNEL_TELEGRAM_SUBTITLE" = "更新情報を購読";

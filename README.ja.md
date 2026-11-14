@@ -114,6 +114,11 @@ UI には `en` / `ja` / `zh-Hans` の 3 セットのローカライズを `CarCa
 
 ## 10. ライセンスと謝辞
 
+メンテナーの連絡先とサポート:
+
+- Telegram チャンネル: [t.me/linkpass666](https://t.me/linkpass666)
+- Afdian: [afdian.com/a/linkpass](https://afdian.com/a/linkpass)
+
 本プロジェクトは `worse_query`（`GPL-3.0-or-later`）を利用しているため、全体を `GPL-3.0-or-later` で公開します。GPL-3.0 の全文は [LICENSE](LICENSE)、vendored コンポーネントの説明は [THIRD_PARTY_LICENSES/](THIRD_PARTY_LICENSES/README.md) を参照してください。
 
 謝辞：
