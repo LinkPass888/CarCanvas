@@ -52,16 +52,7 @@ final class WQAccess {
         guard WQWhitelist.isAllowedCarPlayPreferences(path) else {
             throw CCError.outsideWhitelist(path)
         }
-        let is26 = WQCompatibility.current.majorVersion == 26
-        // create_dir is false: the file must already exist.
-        CCLog.info("prefs query: group=\(group) altFlags=\(is26)")
-        // create_dir MUST be true here. With false, worse_query lstat()s the
-        // target from inside the sandbox, cannot see it, and returns -255
-        // ("nothing exists at this path") - which is exactly the failure the
-        // session log showed. Placard passes true for the same reason.
-        let handle = worse_query(path, group, is26, true)
-        CCLog.info("prefs query handle=\(handle)")
-        guard handle >= 0 else { throw CCError.accessFailed(handle) }
+        let handle = try acquire(path: path, group: group)
         defer { worse_query_release(handle) }
 
         guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)) else {
@@ -84,6 +75,56 @@ final class WQAccess {
         retainedHandle = handle
     }
 
+    /// Tries both flag sets and keeps whichever actually opens the target.
+    ///
+    /// A single fixed guess is not enough. iOS 26 prefers the alternate flags,
+    /// but a token can be issued and consumed and still fail to open the path
+    /// (WQFiles hit that on 27.0.1). `handle=-6` means the kernel refused to
+    /// issue an extension at all, which the other flag set can sometimes fix.
+    private func acquire(path: String, group: String) throws -> Int64 {
+        let order: [Bool]
+        if let known = WQAccess.preferredAltFlags {
+            order = [known, !known]
+        } else {
+            order = [true, false]
+        }
+
+        var last: Int64 = -6
+        for useAlt in order {
+            CCLog.info("query: altFlags=\(useAlt) path=\(path)")
+            let handle = worse_query(path, group, useAlt, true)
+            CCLog.info("query handle=\(handle) (altFlags=\(useAlt))")
+            if handle < 0 {
+                last = handle
+                continue
+            }
+            // A handle that does not open the path is useless.
+            if WQAccess.tokenOpens(path) {
+                WQAccess.preferredAltFlags = useAlt
+                return handle
+            }
+            CCLog.info("token did not open the target; trying the other flags")
+            worse_query_release(handle)
+            last = -6
+        }
+
+        CCLog.error("both flag sets failed for \(path): \(last)")
+        throw CCError.accessFailed(last)
+    }
+
+    /// Whichever flag set last succeeded; nil until one does.
+    private static var preferredAltFlags: Bool?
+
+    /// Verifies the token really grants access instead of trusting the handle.
+    private static func tokenOpens(_ path: String) -> Bool {
+        let fd = open(path, O_RDONLY | O_NONBLOCK)
+        if fd >= 0 {
+            close(fd)
+            return true
+        }
+        return errno != EPERM
+    }
+
     /// Consumes a sandbox extension for a container that the scanner has
     /// already identified as `com.apple.CarPlayWallpaper`.
     ///
@@ -97,16 +138,7 @@ final class WQAccess {
                                              identifier: WQWhitelist.carPlayWallpaperBundleID) else {
             throw CCError.outsideWhitelist(containerPath)
         }
-        // iOS 26.x App Group containers need the alternate flag set; iOS 27
-        // rejects it. This is the only place alt_flags is decided.
-        let is26 = WQCompatibility.current.majorVersion == 26
-        CCLog.info("container query: group=\(group) altFlags=\(is26) path=\(containerPath)")
-        // create_dir=true: the sandbox cannot stat this path, so the existence
-        // precheck would reject a container that does exist.
-        let handle = worse_query(containerPath, group, is26, true)
-        CCLog.info("container query handle=\(handle)")
-        guard handle >= 0 else { throw CCError.accessFailed(handle) }
-        return handle
+        return try acquire(path: containerPath, group: group)
     }
 
     /// The one scoped entry point. The closure runs while the extension is
