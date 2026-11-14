@@ -7,6 +7,9 @@ struct SettingsView: View {
     @State private var showRespringConfirm = false
     @State private var isRespringing = false
     @State private var showLogViewer = false
+    @State private var isClearing = false
+    @State private var message: String?
+    @State private var messageIsError = false
 
     private var entitledGroups: [String] { WQAccess.shared.entitledGroups }
 
@@ -20,6 +23,7 @@ struct SettingsView: View {
 
             Section(L("SETTINGS_SECTION_SESSION")) {
                 Button(L("SETTINGS_LOGOUT")) { showRespringConfirm = true }
+                    .disabled(isClearing)
                 Text(L("SETTINGS_LOGOUT_SUBTITLE")).font(.caption).foregroundStyle(.secondary)
             }
 
@@ -62,7 +66,12 @@ struct SettingsView: View {
 
             Section {
                 Button(L("WALLPAPER_CLEAR_SAVED_DATA"), role: .destructive) { showClear = true }
-
+                    .disabled(isClearing)
+                Text(L("SETTINGS_CACHE_CLEAR_FOOTER"))
+                    .font(.caption).foregroundStyle(.secondary)
+                if isClearing { ProgressView(L("COMMON_PLEASE_WAIT")) }
+            }
+            Section {
                 Button(L("SETTINGS_LOG_VIEW")) { showLogViewer = true }
                 Text(L("SETTINGS_LOG_FOOTER"))
                     .font(.caption).foregroundStyle(.secondary)
@@ -74,13 +83,35 @@ struct SettingsView: View {
             Button(L("SETTINGS_LOGOUT"), role: .destructive) { isRespringing = true }
         } message: { Text(L("SETTINGS_LOGOUT_CONFIRM_MESSAGE")) }
         .confirmationDialog(L("WALLPAPER_CLEAR_CONFIRM_TITLE"), isPresented: $showClear) {
-            Button(L("WALLPAPER_CLEAR"), role: .destructive) { settings.clearSavedData() }
+            Button(L("WALLPAPER_CLEAR"), role: .destructive) { clearCache() }
         } message: { Text(L("WALLPAPER_CLEAR_CONFIRM_MESSAGE")) }
+        .alert(messageIsError ? L("COMMON_ERROR") : L("COMMON_SUCCESS"),
+               isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
+            Button(L("COMMON_OK")) { message = nil }
+        } message: { Text(message ?? "") }
         .fullScreenCover(isPresented: $isRespringing) {
             NeoSpringOverlay()
         }
         .sheet(isPresented: $showLogViewer) {
             LogViewerView()
+        }
+    }
+
+    private func clearCache() {
+        guard !isClearing else { return }
+        isClearing = true
+        Task {
+            do {
+                let count = try await Task.detached(priority: .userInitiated) {
+                    try CacheWriter().clearCacheAndBackups()
+                }.value
+                message = LF("CACHE_CLEAR_DONE", count)
+                messageIsError = false
+            } catch {
+                message = error.localizedDescription
+                messageIsError = true
+            }
+            isClearing = false
         }
     }
 }

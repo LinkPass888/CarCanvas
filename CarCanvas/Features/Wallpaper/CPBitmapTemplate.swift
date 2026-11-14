@@ -1,125 +1,103 @@
 import Foundation
 import CoreGraphics
-import ImageIO
 
-/// A CPBitmap file is read as an opaque template.
-///
-/// Apple never documented the format. Public decoders disagree on BGRA vs
-/// RGBA, 4/8/16-pixel row alignment, and whether the trailer is 24 or 78
-/// bytes. We therefore do NOT hand-write a header. Instead we derive the
-/// geometry from the file we are about to replace, keep the trailer byte-for-
-/// byte, and only rewrite the pixel region.
+/// Only validated single-image, raw 32-bit CPBitmaps can be used as templates.
+/// Preserve the complete metadata/trailer; compressed or unknown formats must
+/// use the system reader/writer, not a byte-count guess.
 struct CPBitmapTemplate {
     let width: Int
     let height: Int
     let alignedWidth: Int
     let trailerLength: Int
     let originalData: Data
+    let format: UInt32
 
-    /// Controls R/B swapping. Exposed in Settings because no public source
-    /// agrees; the user verifies with the built-in preview on a real device.
     enum ChannelOrder: String, CaseIterable, Codable, Identifiable {
         case bgra, rgba
         var id: String { rawValue }
         var label: String { rawValue.uppercased() }
     }
 
-    private static let alignments = [16, 8, 4, 1]
-    private static let trailerLengths = [78, 24]
-
-    /// Reads width/height from the last 24 bytes (little-endian Int32 at
-    /// EOF-20 and EOF-16) — the one field all public decoders agree on.
-    private static func dimensions(_ data: Data) -> (Int, Int)? {
-        guard data.count >= 24 else { return nil }
-        let w: Int32 = data.withUnsafeBytes {
-            $0.loadUnaligned(fromByteOffset: data.count - 20, as: Int32.self)
+    /// The common CPBitmap trailer is checked before handing data to any
+    /// private decoder or writing an exported file into the system cache.
+    static func hasCPBitmapSignature(_ data: Data) -> Bool {
+        guard data.count >= 28, data.count <= 256 * 1024 * 1024 else { return false }
+        return data.withUnsafeBytes { raw in
+            func word(_ distance: Int) -> UInt32 {
+                UInt32(littleEndian: raw.loadUnaligned(fromByteOffset: data.count - distance, as: UInt32.self))
+            }
+            return word(4) == 0xDCB543A2 && word(8) == 1
+                && word(20) > 0 && word(20) <= 16_384 && word(16) > 0 && word(16) <= 16_384
         }
-        let h: Int32 = data.withUnsafeBytes {
-            $0.loadUnaligned(fromByteOffset: data.count - 16, as: Int32.self)
-        }
-        let width = Int(Int32(littleEndian: w)), height = Int(Int32(littleEndian: h))
-        guard width > 0, height > 0, width <= 16_384, height <= 16_384 else { return nil }
-        return (width, height)
     }
 
-    /// Tries each (alignment, trailer) pair and keeps the one whose byte
-    /// count matches the file exactly. Ambiguity is reported instead of
-    /// silently guessed.
     static func parse(_ data: Data) throws -> CPBitmapTemplate {
-        guard let (width, height) = dimensions(data) else {
-            throw CCError.unrecognizedTemplate(data.count)
-        }
-        var matches: [(aligned: Int, trailer: Int, alignment: Int)] = []
-        for alignment in alignments {
-            let aligned = ((width + alignment - 1) / alignment) * alignment
-            for trailer in trailerLengths {
-                if aligned * height * 4 + trailer == data.count {
-                    matches.append((aligned, trailer, alignment))
-                }
+        guard hasCPBitmapSignature(data) else { throw CCError.unrecognizedTemplate(data.count) }
+        func word(_ distanceFromEnd: Int) -> UInt32 {
+            data.withUnsafeBytes {
+                UInt32(littleEndian: $0.loadUnaligned(fromByteOffset: data.count - distanceFromEnd, as: UInt32.self))
             }
         }
-        guard let best = matches.first else {
+        let width = Int(word(20)), height = Int(word(16)), format = word(12)
+        let metadataLength = Int(word(24))
+        guard word(4) == 0xDCB543A2, word(8) == 1, format <= 1,
+              width > 0, height > 0, width <= 16_384, height <= 16_384,
+              metadataLength <= data.count - 28 else { throw CCError.unrecognizedTemplate(data.count) }
+        let trailer = 28 + metadataLength
+        let pixelLength = data.count - trailer
+        guard pixelLength > 0, pixelLength <= 128 * 1024 * 1024 else {
             throw CCError.unrecognizedTemplate(data.count)
         }
-        return CPBitmapTemplate(width: width,
-                                height: height,
-                                alignedWidth: best.aligned,
-                                trailerLength: best.trailer,
-                                originalData: data)
+        if metadataLength > 0 {
+            let metadata = data.subdata(in: pixelLength..<(data.count - 28))
+            guard metadata.starts(with: Data("bplist00".utf8)),
+                  (try? PropertyListSerialization.propertyList(from: metadata, options: [], format: nil)) != nil else {
+                throw CCError.unrecognizedTemplate(data.count)
+            }
+        }
+        // Several alignments can describe the SAME stride when width is already
+        // aligned. Deduplicate layouts instead of pretending those are ambiguous.
+        let strides = Set([16, 8, 4, 1].map { ((width + $0 - 1) / $0) * $0 })
+            .filter { $0 * height * 4 == pixelLength }
+        guard strides.count == 1, let aligned = strides.first else {
+            throw CCError.unrecognizedTemplate(data.count)
+        }
+        return CPBitmapTemplate(width: width, height: height, alignedWidth: aligned,
+                                trailerLength: trailer, originalData: data, format: format)
     }
 
     var pixelRegionLength: Int { alignedWidth * height * 4 }
 
-    /// Renders `image` into the template geometry and returns a complete
-    /// file: new pixel bytes + the untouched original trailer.
-    func render(image: CGImage, order: ChannelOrder) throws -> Data {
-        let bytesPerRow = alignedWidth * 4
-        var pixels = [UInt8](repeating: 0, count: pixelRegionLength)
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
+    private func bitmapInfo(order: ChannelOrder) -> CGBitmapInfo {
+        let alpha: CGImageAlphaInfo
+        if format == 0 { alpha = order == .bgra ? .noneSkipFirst : .noneSkipLast }
+        else { alpha = order == .bgra ? .premultipliedFirst : .premultipliedLast }
+        return CGBitmapInfo(rawValue: alpha.rawValue)
+            .union(order == .bgra ? .byteOrder32Little : .byteOrder32Big)
+    }
 
-        let drew: Bool = pixels.withUnsafeMutableBytes { raw in
-            guard let ctx = CGContext(data: raw.baseAddress,
-                                      width: alignedWidth,
-                                      height: height,
-                                      bitsPerComponent: 8,
-                                      bytesPerRow: bytesPerRow,
-                                      space: colorSpace,
-                                      bitmapInfo: bitmapInfo.rawValue) else {
-                return false
-            }
-            ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+    func render(image: CGImage, order: ChannelOrder) throws -> Data {
+        var pixels = Data(count: pixelRegionLength)
+        let drew = pixels.withUnsafeMutableBytes { raw -> Bool in
+            guard let context = CGContext(data: raw.baseAddress, width: width, height: height,
+                                          bitsPerComponent: 8, bytesPerRow: alignedWidth * 4,
+                                          space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: bitmapInfo(order: order).rawValue) else { return false }
+            context.interpolationQuality = .high
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
             return true
         }
         guard drew else { throw CCError.renderFailed }
-
-        if order == .bgra {
-            for i in stride(from: 0, to: pixelRegionLength, by: 4) {
-                let r = pixels[i]
-                pixels[i] = pixels[i + 2]
-                pixels[i + 2] = r
-            }
-        }
-
-        var out = Data(pixels)
-        out.append(originalData.suffix(trailerLength))
-        return out
+        pixels.append(originalData.suffix(trailerLength))
+        return pixels
     }
 
-    /// Produces a preview using the same geometry, so the user can eyeball
-    /// channel order / orientation before committing an overwrite.
-    func preview() -> CGImage? {
-        let bytesPerRow = alignedWidth * 4
-        return originalData.withUnsafeBytes { raw -> CGImage? in
-            guard let base = raw.baseAddress else { return nil }
-            let ctx = CGContext(data: UnsafeMutableRawPointer(mutating: base),
-                                width: alignedWidth,
-                                height: height,
-                                bitsPerComponent: 8,
-                                bytesPerRow: bytesPerRow,
-                                space: CGColorSpaceCreateDeviceRGB(),
-                                bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue).rawValue)
-            return ctx?.makeImage()
-        }
+    /// Read-only provider owns its bytes. Width excludes row padding, and the
+    /// selected channel order is the same one used by the fallback renderer.
+    func preview(order: ChannelOrder = .bgra) -> CGImage? {
+        guard let provider = CGDataProvider(data: Data(originalData.prefix(pixelRegionLength)) as CFData) else { return nil }
+        return CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32,
+                       bytesPerRow: alignedWidth * 4, space: CGColorSpaceCreateDeviceRGB(),
+                       bitmapInfo: bitmapInfo(order: order), provider: provider, decode: nil,
+                       shouldInterpolate: true, intent: .defaultIntent)
     }
 }

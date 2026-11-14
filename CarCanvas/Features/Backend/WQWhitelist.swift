@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 /// The *only* paths this app is allowed to hand to the sandbox extension.
 ///
@@ -67,9 +68,30 @@ enum WQWhitelist {
         return regex.firstMatch(in: name, range: range) != nil
     }
 
+    /// Filesystem validation is scoped, not merely lexical. Refuse symlinked
+    /// intermediate directories. A genuinely absent fixed cache is valid empty
+    /// state; permission errors and a replaced directory are never "empty".
+    static func cacheDirectoryExists(_ directory: String) throws -> Bool {
+        guard WQAccess.hasActiveExtensionOnCurrentThread,
+              isAllowedCacheDirectory(directory) else { throw CCError.outsideWhitelist(directory) }
+        let suffix = "/" + cacheRelativePath
+        var current = String(directory.dropLast(suffix.count))
+        for component in cacheRelativePath.split(separator: "/") {
+            current += "/" + component
+            var info = stat()
+            guard lstat(current, &info) == 0 else {
+                let code = errno
+                if code == ENOENT { return false }
+                throw NSError(domain: NSPOSIXErrorDomain, code: Int(code), userInfo: [NSLocalizedDescriptionKey: "Cache lstat failed (errno \(code))."])
+            }
+            guard (info.st_mode & UInt16(S_IFMT)) == UInt16(S_IFDIR) else { throw CCError.outsideWhitelist(current) }
+        }
+        return true
+    }
+
     static func appearance(of fileName: String) -> WallpaperTarget.Appearance {
-        if fileName.contains("-Dark-") || fileName.hasSuffix("-Dark.cpbitmap") { return .dark }
-        if fileName.contains("-Light-") || fileName.hasSuffix("-Light.cpbitmap") { return .light }
-        return .unknown
+        guard let token = WallpaperTarget.appearanceToken(in: fileName),
+              let range = Range(token.range(at: 1), in: fileName) else { return .unknown }
+        return WallpaperTarget.Appearance(rawValue: fileName[range].lowercased()) ?? .unknown
     }
 }

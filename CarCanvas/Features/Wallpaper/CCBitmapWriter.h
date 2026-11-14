@@ -17,6 +17,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// `error` is filled in when the system method is unavailable or refuses.
 BOOL CCWriteCPBitmap(CGImageRef image, NSURL *path, NSError * _Nullable * _Nullable error);
 
+/// System CPBitmap reader. The caller must hold its scoped file access until
+/// it has rendered a small, independent thumbnail from this retained image.
+CGImageRef _Nullable CCCopyCPBitmapImage(NSURL *path, NSError * _Nullable * _Nullable error) CF_RETURNS_RETAINED;
+
 /// Whether the system CPBitmap writer is available on this OS build.
 BOOL CCBitmapWriterIsAvailable(void);
 

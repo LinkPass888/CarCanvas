@@ -198,81 +198,34 @@ final class ContainerResolver {
         }
 
         let files = try WQAccess.shared.withAccess(containerPath: container) {
-            guard let names = try? FileManager.default.contentsOfDirectory(atPath: cacheDirectory) else {
-                // The container exists but this exact cache path does not. On
-                // newer builds the mapped-image cache can live elsewhere inside
-                // the same container, so look one level up before giving up.
-                if let fallback = Self.locateWallpaperImages(inContainer: container) {
-                    CCLog.info("cache directory fallback: \(fallback)")
-                    let targets = Self.cacheFiles(in: fallback)
-                    HistoryStore.shared.backUpMissingOriginals(targets)
-                    return targets
-                }
-                CCLog.error("cache directory unreadable: \(cacheDirectory)")
-                throw CCError.cacheNotFound
-            }
-            CCLog.info("cache directory: \(names.count) entries")
-            var targets: [WallpaperTarget] = []
-            for name in names.sorted() {
-                let path = cacheDirectory + "/" + name
-                guard WQWhitelist.isAllowedCacheFile(path, in: cacheDirectory) else { continue }
-                var st = stat()
-                guard lstat(path, &st) == 0, (st.st_mode & UInt16(S_IFMT)) == UInt16(S_IFREG) else { continue }
-                targets.append(WallpaperTarget(path: path,
-                                               fileName: name,
-                                               appearance: WQWhitelist.appearance(of: name),
-                                               byteCount: Int(st.st_size)))
-            }
+            let targets = try Self.cacheFiles(in: cacheDirectory)
             HistoryStore.shared.backUpMissingOriginals(targets)
             return targets
         }
         CCLog.info("cache files accepted: \(files.count) (route: \(route))")
-        guard !files.isEmpty else { throw CCError.noCacheFiles }
+        // An identified container with an empty/missing fixed cache remains
+        // usable for explicit cleanup. Creation/apply still check their inputs.
         return Resolved(containerPath: container, cacheDirectory: cacheDirectory, files: files)
     }
 
-    /// Searches the container for a directory that actually holds .cpbitmap
-    /// files, so a layout change in CarPlay's cache path does not break the app.
-    private static func locateWallpaperImages(inContainer container: String) -> String? {
-        let candidates = [
-            container + "/Library/Caches/MappedImageCache",
-            container + "/Library/Caches",
-            container + "/Library"
-        ]
-        let fm = FileManager.default
-        for candidate in candidates {
-            guard let entries = try? fm.contentsOfDirectory(atPath: candidate) else { continue }
-            for entry in entries where entry.lowercased().contains("wallpaper") {
-                let path = candidate + "/" + entry
-                var isDir: ObjCBool = false
-                if fm.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue {
-                    if let inner = try? fm.contentsOfDirectory(atPath: path),
-                       inner.contains(where: { $0.lowercased().hasSuffix(".cpbitmap") }) {
-                        return path
-                    }
-                }
-            }
-            // Also accept the candidate itself if it holds cache files.
-            if let inner = try? fm.contentsOfDirectory(atPath: candidate),
-               inner.contains(where: { $0.lowercased().hasSuffix(".cpbitmap") }) {
-                return candidate
-            }
-        }
-        return nil
-    }
-
-    private static func cacheFiles(in directory: String) -> [WallpaperTarget] {
-        guard let names = try? FileManager.default.contentsOfDirectory(atPath: directory) else { return [] }
+    /// Re-enumerate INSIDE the caller's existing scope before reading/writing.
+    /// Only the fixed directory and whitelist-named regular files participate.
+    static func cacheFiles(in directory: String) throws -> [WallpaperTarget] {
+        guard try WQWhitelist.cacheDirectoryExists(directory) else { return [] }
+        let names = try FileManager.default.contentsOfDirectory(atPath: directory)
         var targets: [WallpaperTarget] = []
         for name in names.sorted() {
             let path = directory + "/" + name
-            var st = stat()
-            guard lstat(path, &st) == 0, (st.st_mode & UInt16(S_IFMT)) == UInt16(S_IFREG) else { continue }
-            guard name.lowercased().hasSuffix(".cpbitmap") else { continue }
-            targets.append(WallpaperTarget(path: path,
-                                           fileName: name,
-                                           appearance: WQWhitelist.appearance(of: name),
-                                           byteCount: Int(st.st_size)))
+            guard WQWhitelist.isAllowedCacheFile(path, in: directory) else { continue }
+            var info = stat()
+            guard lstat(path, &info) == 0 else {
+                let code = errno
+                if code == ENOENT { continue }
+                throw NSError(domain: NSPOSIXErrorDomain, code: Int(code), userInfo: [NSLocalizedDescriptionKey: "Cache file lstat failed (errno \(code))."])
+            }
+            guard (info.st_mode & UInt16(S_IFMT)) == UInt16(S_IFREG) else { continue }
+            targets.append(WallpaperTarget(path: path, fileName: name,
+                                           appearance: WQWhitelist.appearance(of: name), byteCount: Int(info.st_size)))
         }
         return targets
     }

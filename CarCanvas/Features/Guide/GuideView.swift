@@ -30,6 +30,7 @@ struct GuideView: View {
         [(L("GUIDE_STEP1_TITLE"), L("GUIDE_STEP1_BODY")),
          (L("GUIDE_STEP2_TITLE"), L("GUIDE_STEP2_BODY")),
          (L("GUIDE_STEP3_TITLE"), L("GUIDE_STEP3_BODY")),
-         (L("GUIDE_STEP4_TITLE"), L("GUIDE_STEP4_BODY"))]
+         (L("GUIDE_STEP4_TITLE"), L("GUIDE_STEP4_BODY")),
+         (L("GUIDE_STEP5_TITLE"), L("GUIDE_STEP5_BODY"))]
     }
 }

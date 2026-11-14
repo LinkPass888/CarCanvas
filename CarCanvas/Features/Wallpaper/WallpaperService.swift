@@ -1,122 +1,131 @@
 import Foundation
 import CoreGraphics
 import ImageIO
-import UniformTypeIdentifiers
 
-/// Creates local CPBitmap files from a chosen image.
-///
-/// The system's own CPBitmap writer is used first, which is what the original
-/// app did and which needs no cache file on the device. Only if that writer is
-/// unavailable does it fall back to the template approach. Nothing outside this
-/// app's own Documents directory is written, and nothing is applied to CarPlay
-/// at this stage.
+/// Local creation is independent of applying a specifically selected cache group.
 final class WallpaperService {
     private let history = HistoryStore.shared
-    private let settings = SettingsStore.shared
+    private let channelOrder: CPBitmapTemplate.ChannelOrder
+    static let thumbnailDimension = 320
 
-    /// Reads the first available cache file as a template. Requires the
-    /// scoped extension, but performs a read only.
+    init(channelOrder: CPBitmapTemplate.ChannelOrder = .bgra) {
+        self.channelOrder = channelOrder
+    }
+
     func loadTemplate() throws -> CPBitmapTemplate {
         let resolved = try ContainerResolver().resolve()
-        guard let target = resolved.files.first else { throw CCError.noCacheFiles }
         return try WQAccess.shared.withAccess(containerPath: resolved.containerPath) {
-            guard let data = try? Data(contentsOf: URL(fileURLWithPath: target.path),
-                                       options: [.mappedIfSafe]) else {
-                throw CCError.templateUnreadable(target.fileName)
-            }
-            return try CPBitmapTemplate.parse(data)
+            guard let target = try ContainerResolver.cacheFiles(in: resolved.cacheDirectory).first else { throw CCError.noCacheFiles }
+            return try CPBitmapTemplate.parse(Data(contentsOf: URL(fileURLWithPath: target.path)))
         }
     }
 
-    /// Builds Dark + Light CPBitmap files in Documents/Exports and records them
-    /// in History. Does NOT touch CarPlay — see CacheWriter for the explicit
-    /// overwrite.
-    ///
-    /// This deliberately does not require the device to have a CarPlay cache
-    /// yet: the original app let you create local files before CarPlay had ever
-    /// generated one.
+    /// Encode each photo separately. Only after BOTH succeeded does savePair
+    /// reserve one base name and commit two files plus one HistoryEntry.
     @discardableResult
-    func createLocal(imageURL: URL,
-                     appearances: Set<WallpaperTarget.Appearance>) throws -> HistoryEntry {
-        guard let source = CGImageSourceCreateWithURL(imageURL as CFURL, nil),
-              let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
-            throw CCError.renderFailed
-        }
-
-        // Encode ONCE. The system writer is not reliably repeatable in the same
-        // process (the second call can fail), and both appearances share the
-        // same pixels anyway - only the file name differs.
-        let data = try encode(cgImage, appearance: appearances.contains(.dark) ? .dark : .light)
-        let baseName = sanitized(settings.exportBaseName)
+    func createLocal(darkImageURL: URL, lightImageURL: URL, baseName rawName: String) throws -> HistoryEntry {
+        let baseName = sanitized(rawName)
         guard !baseName.isEmpty else { throw CCError.renderFailed }
-
-        // Same name already on disk: append " 2", " 3", ... instead of
-        // overwriting the earlier export.
-        let uniqueName = history.uniqueBaseName(from: baseName)
-        if uniqueName != baseName {
-            CCLog.info("name collision: \(baseName) -> \(uniqueName)")
-        }
-
-        var last: HistoryEntry?
-        for appearance in appearances where appearance != .unknown {
-            last = try history.save(data: data,
-                                    baseName: uniqueName,
-                                    appearance: appearance,
-                                    source: .local,
-                                    sourceImageName: imageURL.lastPathComponent)
-        }
-        guard let entry = last else { throw CCError.nothingSelected }
-        return entry
+        let darkData = try autoreleasepool { try encode(photo(at: darkImageURL)) }
+        // If the second system call is unavailable/refused, the first VALID
+        // output itself supplies the geometry/metadata, even before CarPlay has
+        // a cache. Render the second photo; never copy the first photo's pixels.
+        let localTemplate = try? CPBitmapTemplate.parse(darkData)
+        let lightData = try autoreleasepool { try encode(photo(at: lightImageURL), fallbackTemplate: localTemplate) }
+        return try history.savePair(darkData: darkData, lightData: lightData, baseName: baseName,
+                                    sourceImageName: "\(darkImageURL.lastPathComponent) / \(lightImageURL.lastPathComponent)")
     }
 
-    /// Decodes an existing cache file into an image for the preview slots.
-    /// Uses the template header so the geometry matches how the file is laid
-    /// out, and falls back to the system decoder for anything it cannot parse.
-    func previewImage(for target: WallpaperTarget,
-                      resolved: ContainerResolver.Resolved) -> CGImage? {
-        let url = URL(fileURLWithPath: target.path)
-        let data: Data? = try? WQAccess.shared.withAccess(containerPath: resolved.containerPath) {
-            try? Data(contentsOf: url, options: [.mappedIfSafe])
-        }
-        guard let data else { return nil }
-
-        if let template = try? CPBitmapTemplate.parse(data), let image = template.preview() {
-            return image
-        }
-        // Non-CPBitmap or an unrecognised layout: let the system try.
-        return CGImageSourceCreateWithData(data as CFData, nil).flatMap {
-            CGImageSourceCreateImageAtIndex($0, 0, nil)
-        }
+    /// ImageIO handles real photo formats and their EXIF orientation, not
+    /// CPBitmap. A pick displays immediately without retaining full pixels.
+    static func photoPreview(data: Data) -> CGImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: thumbnailDimension
+        ] as CFDictionary)
     }
 
-    /// System writer first (no template needed), template renderer as fallback.
-    private func encode(_ image: CGImage,
-                        appearance: WallpaperTarget.Appearance) throws -> Data {
-        let baseName = sanitized(settings.exportBaseName)
-        guard !baseName.isEmpty else { throw CCError.renderFailed }
+    private func photo(at url: URL) throws -> CGImage {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any],
+              let width = properties[kCGImagePropertyPixelWidth as String] as? NSNumber,
+              let height = properties[kCGImagePropertyPixelHeight as String] as? NSNumber else { throw CCError.renderFailed }
+        let maximum = max(width.intValue, height.intValue)
+        guard maximum > 0, maximum <= 16_384,
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceShouldCacheImmediately: true,
+                kCGImageSourceThumbnailMaxPixelSize: maximum
+              ] as CFDictionary) else { throw CCError.renderFailed }
+        return image
+    }
 
-        if CCBitmapWriterIsAvailable() {
-            let suffix = appearance == .dark ? "Dark" : "Light"
-            let tmp = FileManager.default.temporaryDirectory
-                .appendingPathComponent("\(baseName)-\(suffix).cpbitmap")
-            var writeError: NSError?
-            if CCWriteCPBitmap(image, tmp, &writeError),
-               let data = try? Data(contentsOf: tmp) {
-                try? FileManager.default.removeItem(at: tmp)
-                return data
+    func previewImage(for target: WallpaperTarget, resolved: ContainerResolver.Resolved) -> CGImage? {
+        do {
+            return try WQAccess.shared.withAccess(containerPath: resolved.containerPath) {
+                guard try WQWhitelist.cacheDirectoryExists(resolved.cacheDirectory),
+                      try ContainerResolver.cacheFiles(in: resolved.cacheDirectory).contains(where: { $0.path == target.path && $0.byteCount > 0 && $0.byteCount <= 256 * 1024 * 1024 }) else {
+                    throw CCError.templateUnreadable(target.fileName)
+                }
+                return autoreleasepool { () -> CGImage? in
+                    let url = URL(fileURLWithPath: target.path)
+                    var readError: NSError?
+                    do {
+                        // Native decoding must not be rejected by our narrower
+                        // raw-template parser. Only the detached thumbnail escapes.
+                        if let image = CCCopyCPBitmapImage(url, &readError), let small = Self.thumbnail(image) { return small }
+                        CCLog.info("system CPBitmap preview unavailable for \(target.fileName): \(readError?.localizedDescription ?? "no image"); trying template")
+                        let data = try Data(contentsOf: url)
+                        let template = try CPBitmapTemplate.parse(data)
+                        if let image = template.preview(order: channelOrder), let small = Self.thumbnail(image) { return small }
+                        throw CCError.renderFailed
+                    } catch {
+                        CCLog.error("CPBitmap preview failed for \(target.fileName): system=\(readError?.localizedDescription ?? "no image"); template=\(error.localizedDescription)")
+                        return nil
+                    }
+                }
             }
-            try? FileManager.default.removeItem(at: tmp)
-            let why = writeError?.localizedDescription ?? "unknown"
-            CCLog.info("system CPBitmap writer failed (\(why)); using template")
+        } catch {
+            CCLog.error("CPBitmap preview access failed for \(target.fileName): \(error.localizedDescription)")
+            return nil
         }
+    }
 
-        // Fallback: reuse an existing cache file as the format template.
-        let template = try loadTemplate()
-        return try template.render(image: image, order: settings.channelOrder)
+    static func thumbnail(_ image: CGImage) -> CGImage? {
+        guard image.width > 0, image.height > 0, image.width <= 16_384, image.height <= 16_384 else { return nil }
+        let scale = min(1, Double(thumbnailDimension) / Double(max(image.width, image.height)))
+        let width = max(1, Int(Double(image.width) * scale)), height = max(1, Int(Double(image.height) * scale))
+        guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
+                                      bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue) else { return nil }
+        context.interpolationQuality = .high
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return context.makeImage()
+    }
+
+    private func encode(_ image: CGImage, fallbackTemplate: CPBitmapTemplate? = nil) throws -> Data {
+        if CCBitmapWriterIsAvailable() {
+            // Unique destinations and distinct UIImage instances for the two
+            // photos; never reuse the first photo's bytes as the second output.
+            let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("cc-bitmap-\(UUID().uuidString).cpbitmap")
+            defer { try? FileManager.default.removeItem(at: temporary) }
+            var writeError: NSError?
+            if CCWriteCPBitmap(image, temporary, &writeError) {
+                let data = try Data(contentsOf: temporary)
+                if CPBitmapTemplate.hasCPBitmapSignature(data) { return data }
+            }
+            CCLog.info("system CPBitmap writer failed (\(writeError?.localizedDescription ?? "empty output")); using validated template")
+        }
+        if let fallbackTemplate { return try fallbackTemplate.render(image: image, order: channelOrder) }
+        return try loadTemplate().render(image: image, order: channelOrder)
     }
 
     private func sanitized(_ raw: String) -> String {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
-        return String(raw.unicodeScalars.filter { allowed.contains($0) }).trimmingCharacters(in: .whitespaces)
+        return String(raw.unicodeScalars.filter { allowed.contains($0) })
     }
 }

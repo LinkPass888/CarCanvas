@@ -1,58 +1,98 @@
 import SwiftUI
 
-/// Explicit per-destination confirmation. The user picks Dark and/or Light;
-/// there is no "apply to everything" and no path text field here.
+/// Select exactly one existing same-name group; there is no default selection
+/// and no mode/all-target toggle. The backend revalidates this exact membership.
 struct ExportDestinationSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var store = CarPlayBrowserStore.shared
     let entry: HistoryEntry
     let onFinish: (String) -> Void
 
-    @State private var dark = true
-    @State private var light = true
+    @State private var selectedGroupID: WallpaperGroup.ID?
     @State private var confirmed = false
-    @State private var targets: [WallpaperTarget] = []
+    @State private var isWorking = false
     @State private var error: String?
-    @State private var result: String?
+
+    private var selectedGroup: WallpaperGroup? {
+        store.groups.first { $0.id == selectedGroupID && $0.isReplaceable }
+    }
 
     var body: some View {
         NavigationStack {
             Form {
-                    Section(L("HISTORY_EXPORT_CARPLAY_PICK_TITLE")) {
+                Section(L("HISTORY_EXPORT_CARPLAY_PICK_TITLE")) {
                     Text(L("HISTORY_EXPORT_CARPLAY_PICK_MESSAGE"))
                         .font(.caption).foregroundStyle(.secondary)
-                    Toggle(L("WALLPAPER_SET_DARK"), isOn: $dark)
-                    Toggle(L("WALLPAPER_SET_LIGHT"), isOn: $light)
+                    if store.isLoading { ProgressView(L("BROWSER_LOADING")) }
+                    else if store.groups.isEmpty { Text(L("BROWSER_WALLPAPER_CACHE_EMPTY")).foregroundStyle(.secondary) }
+                    ForEach(store.groups) { group in
+                        Button {
+                            selectedGroupID = group.id
+                            confirmed = false
+                        } label: {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text(group.displayName).font(.headline)
+                                    Spacer()
+                                    Image(systemName: selectedGroupID == group.id ? "checkmark.circle.fill" : "circle")
+                                        .foregroundStyle(selectedGroupID == group.id ? Color.accentColor : .secondary)
+                                }
+                                WallpaperGroupRow(group: group, thumbnails: store.thumbnails, showsTitle: false)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!group.isReplaceable || isWorking || store.isLoading)
+                        .accessibilityAddTraits(selectedGroupID == group.id ? .isSelected : [])
+                    }
                 }
                 Section {
                     Toggle(L("EXPORT_CONFIRM_TOGGLE"), isOn: $confirmed)
-                        .font(.footnote)
+                        .font(.footnote).disabled(selectedGroup == nil || isWorking)
                     Button(L("HISTORY_EXPORT_CARPLAY_WRITE")) { perform() }
-                        .disabled(!confirmed || (!dark && !light) || result != nil)
-                }
-                if let result {
-                    Section { Text(result).font(.footnote) }
+                        .disabled(!confirmed || selectedGroup == nil || isWorking || store.isLoading)
+                    if isWorking { ProgressView(L("COMMON_PLEASE_WAIT")) }
                 }
             }
             .navigationTitle(L("HISTORY_EXPORT_CARPLAY"))
-            .toolbar { Button(L("COMMON_CANCEL")) { dismiss() } }
-            .task { loadTargets() }
-            .alert(L("COMMON_ERROR"), isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
-                Button(L("COMMON_OK")) { error = nil }
-            } message: { Text(error ?? "") }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L("COMMON_CANCEL")) { dismiss() }.disabled(isWorking)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L("BROWSER_RETRY")) {
+                        confirmed = false
+                        Task { await store.load(forceRefresh: true) }
+                    }.disabled(isWorking || store.isLoading)
+                }
+            }
+            .interactiveDismissDisabled(isWorking)
+            .task { await store.load() }
+            .onChange(of: store.groups) { _, _ in
+                if selectedGroup == nil { selectedGroupID = nil; confirmed = false }
+            }
+            .alert(L("COMMON_ERROR"), isPresented: Binding(get: { error != nil || store.error != nil }, set: {
+                if !$0 { error = nil; store.error = nil }
+            })) {
+                Button(L("COMMON_OK")) { error = nil; store.error = nil }
+            } message: { Text(error ?? store.error ?? "") }
         }
     }
 
-    private func loadTargets() {
-        do { targets = try ContainerResolver().resolve().files }
-        catch let caught { self.error = caught.localizedDescription }
-    }
-
     private func perform() {
-        do {
-            let r = try CacheWriter().overwrite(entry: entry, targets: targets, dark: dark, light: light)
-            result = LF("HISTORY_EXPORT_CARPLAY_DONE", r.succeeded, r.failed)
-        } catch let caught {
-            self.error = caught.localizedDescription
+        guard confirmed, let group = selectedGroup, !isWorking else { return }
+        let selectedEntry = entry
+        isWorking = true
+        Task {
+            do {
+                let result = try await Task.detached(priority: .userInitiated) {
+                    try CacheWriter().overwrite(entry: selectedEntry, group: group)
+                }.value
+                onFinish(LF("HISTORY_EXPORT_CARPLAY_DONE", result.succeeded, result.failed))
+                dismiss()
+            } catch {
+                self.error = error.localizedDescription
+            }
+            isWorking = false
         }
     }
 }

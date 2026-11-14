@@ -185,15 +185,115 @@ final class HistoryStore: ObservableObject {
     }
 
     func backupData(for backup: OriginalBackup) throws -> Data {
-        try storageQueue.sync {
+        // In particular, a queued restore cannot keep a payload captured before
+        // cleanup and re-create the old cache after its backing record was purged.
+        guard WQAccess.hasActiveExtensionOnCurrentThread else { throw CCError.backupFailed }
+        return try storageQueue.sync {
+            guard backupIndexReadable, storedBackups.contains(backup) else { throw CCError.backupFailed }
             do {
-                guard backupIndexReadable, storedBackups.contains(backup) else { throw CCError.backupFailed }
                 return try validatedBackupData(backup)
             } catch {
                 failedBackups.insert(backup.cacheFileName)
                 publishBackups()
                 CCLog.error("original backup validation failed for \(backup.cacheFileName): \(error.localizedDescription)")
                 throw CCError.backupFailed
+            }
+        }
+    }
+
+    struct BackupPurge {
+        let temporaryDirectory: URL
+        let existed: Bool
+        var snapshot: URL { temporaryDirectory.appendingPathComponent("Backups", isDirectory: true) }
+    }
+
+    /// Prepare and byte-verify ALL local copies (including legacy files and the
+    /// index) before CacheWriter deletes even the first system file.
+    func prepareBackupPurge() throws -> BackupPurge {
+        guard WQAccess.hasActiveExtensionOnCurrentThread else { throw CCError.backupFailed }
+        return try storageQueue.sync {
+            let manager = FileManager.default
+            let temporary = manager.temporaryDirectory.appendingPathComponent("cc-backups-clear-\(UUID().uuidString)", isDirectory: true)
+            let prepared = BackupPurge(temporaryDirectory: temporary, existed: manager.fileExists(atPath: backupsDirectory.path))
+            do {
+                try manager.createDirectory(at: temporary, withIntermediateDirectories: true)
+                if prepared.existed {
+                    try manager.copyItem(at: backupsDirectory, to: prepared.snapshot)
+                    try verifyBackupSnapshot(from: backupsDirectory, to: prepared.snapshot)
+                }
+                return prepared
+            } catch {
+                try? manager.removeItem(at: temporary)
+                throw error
+            }
+        }
+    }
+
+    /// Called only after the whitelisted system cache is successfully empty.
+    /// Exports/history.json and settings are intentionally untouched.
+    func purgeOriginalBackups(using prepared: BackupPurge) throws {
+        guard WQAccess.hasActiveExtensionOnCurrentThread else { throw CCError.backupFailed }
+        try storageQueue.sync {
+            let manager = FileManager.default
+            var beganRemoval = false
+            do {
+                if prepared.existed {
+                    try verifyBackupSnapshot(from: backupsDirectory, to: prepared.snapshot)
+                    beganRemoval = true
+                    try manager.removeItem(at: backupsDirectory)
+                } else if manager.fileExists(atPath: backupsDirectory.path) {
+                    throw CCError.backupFailed
+                }
+                try manager.createDirectory(at: backupsDirectory, withIntermediateDirectories: true)
+                guard try manager.contentsOfDirectory(atPath: backupsDirectory.path).isEmpty else { throw CCError.backupFailed }
+            } catch {
+                if prepared.existed && beganRemoval {
+                    do {
+                        try restoreMissingBackupFiles(from: prepared.snapshot, to: backupsDirectory)
+                        try verifyBackupSnapshot(from: backupsDirectory, to: prepared.snapshot)
+                    } catch let rollbackError {
+                        for backup in storedBackups where (try? validatedBackupData(backup)) == nil {
+                            failedBackups.insert(backup.cacheFileName)
+                        }
+                        publishBackups()
+                        CCLog.error("backup purge rollback failed: \(rollbackError.localizedDescription)")
+                        throw NSError(domain: "CarCanvas.HistoryStore", code: 1,
+                                      userInfo: [NSLocalizedDescriptionKey: LF("HISTORY_BACKUP_ROLLBACK_FAILED", error.localizedDescription)])
+                    }
+                }
+                throw error
+            }
+            storedBackups.removeAll()
+            failedBackups.removeAll()
+            backupIndexReadable = true
+            backupIndexDirty = false
+            publishBackups()
+        }
+    }
+
+    private func verifyBackupSnapshot(from source: URL, to snapshot: URL) throws {
+        let keys: Set<URLResourceKey> = [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey]
+        let a = try source.resourceValues(forKeys: keys), b = try snapshot.resourceValues(forKeys: keys)
+        guard a.isSymbolicLink != true, b.isSymbolicLink != true else { throw CCError.backupFailed }
+        if a.isDirectory == true && b.isDirectory == true {
+            let names = try FileManager.default.contentsOfDirectory(atPath: source.path)
+            guard Set(names) == Set(try FileManager.default.contentsOfDirectory(atPath: snapshot.path)) else { throw CCError.backupFailed }
+            for name in names { try verifyBackupSnapshot(from: source.appendingPathComponent(name), to: snapshot.appendingPathComponent(name)) }
+        } else {
+            guard a.isRegularFile == true, b.isRegularFile == true,
+                  try Data(contentsOf: source) == Data(contentsOf: snapshot) else { throw CCError.backupFailed }
+        }
+    }
+
+    private func restoreMissingBackupFiles(from snapshot: URL, to destination: URL) throws {
+        let manager = FileManager.default
+        if !manager.fileExists(atPath: destination.path) {
+            try manager.copyItem(at: snapshot, to: destination)
+        } else if try snapshot.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true {
+            let values = try destination.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+            guard values.isDirectory == true, values.isSymbolicLink != true else { throw CCError.backupFailed }
+            for name in try manager.contentsOfDirectory(atPath: snapshot.path) {
+                try restoreMissingBackupFiles(from: snapshot.appendingPathComponent(name), to: destination.appendingPathComponent(name))
             }
         }
     }
@@ -272,6 +372,39 @@ final class HistoryStore: ObservableObject {
         return OriginalBackup(cacheFileName: target.fileName, backupFileName: name,
                               createdAt: createdAt, byteCount: payload.count,
                               source: source, sourceFileName: sourceFileName)
+    }
+
+    /// Commit both independently encoded appearances as one entry. Reserve the
+    /// name and persist the index on the same queue; a failed pair leaves no row
+    /// or half-created export behind. Existing single-image entries stay readable.
+    @discardableResult
+    func savePair(darkData: Data, lightData: Data, baseName: String,
+                  sourceImageName: String?) throws -> HistoryEntry {
+        try storageQueue.sync {
+            let uniqueName = uniqueBaseName(from: baseName)
+            let darkName = "\(uniqueName)-Dark.cpbitmap"
+            let lightName = "\(uniqueName)-Light.cpbitmap"
+            let darkURL = url(for: darkName), lightURL = url(for: lightName)
+            let entry = HistoryEntry(baseName: uniqueName, source: .local,
+                                     darkFileName: darkName, lightFileName: lightName,
+                                     sourceImageName: sourceImageName)
+            do {
+                guard !darkData.isEmpty, !lightData.isEmpty else { throw CCError.renderFailed }
+                try darkData.write(to: darkURL, options: .atomic)
+                try lightData.write(to: lightURL, options: .atomic)
+                guard try Data(contentsOf: darkURL) == darkData,
+                      try Data(contentsOf: lightURL) == lightData else { throw CCError.verificationFailed }
+                let updated = [entry] + storedEntries
+                try JSONEncoder().encode(updated).write(to: indexURL, options: .atomic)
+                storedEntries = updated
+                publishEntries()
+                return entry
+            } catch {
+                try? FileManager.default.removeItem(at: darkURL)
+                try? FileManager.default.removeItem(at: lightURL)
+                throw error
+            }
+        }
     }
 
     /// Writes an exported CPBitmap and records it on the disk queue.
