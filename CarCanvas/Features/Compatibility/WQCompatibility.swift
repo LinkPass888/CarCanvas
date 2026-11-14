@@ -14,11 +14,16 @@ import Foundation
 /// These are author/downstream claims, not an Apple advisory, and no CVE is
 /// assigned. Anything outside them fails closed.
 enum WQCompatibility {
-    private static let supported: [ClosedRange<OperatingSystemVersion>] = [
-        OperatingSystemVersion(majorVersion: 26, minorVersion: 0, patchVersion: 0)
-            ... OperatingSystemVersion(majorVersion: 26, minorVersion: 7, patchVersion: 2),
-        OperatingSystemVersion(majorVersion: 27, minorVersion: 0, patchVersion: 0)
-            ... OperatingSystemVersion(majorVersion: 27, minorVersion: 2, patchVersion: 99)
+    private struct Range {
+        let lower: OperatingSystemVersion
+        let upper: OperatingSystemVersion
+    }
+
+    private static let supported: [Range] = [
+        Range(lower: OperatingSystemVersion(majorVersion: 26, minorVersion: 0, patchVersion: 0),
+              upper: OperatingSystemVersion(majorVersion: 26, minorVersion: 7, patchVersion: 2)),
+        Range(lower: OperatingSystemVersion(majorVersion: 27, minorVersion: 0, patchVersion: 0),
+              upper: OperatingSystemVersion(majorVersion: 27, minorVersion: 2, patchVersion: 99))
     ]
 
     static var current: OperatingSystemVersion { ProcessInfo.processInfo.operatingSystemVersion }
@@ -28,26 +33,19 @@ enum WQCompatibility {
         return "\(v.majorVersion).\(v.minorVersion).\(v.patchVersion)"
     }
 
-    private static func compare(_ a: OperatingSystemVersion, _ b: OperatingSystemVersion) -> ComparisonResult {
-        for (x, y) in [(a.majorVersion, b.majorVersion),
-                       (a.minorVersion, b.minorVersion),
-                       (a.patchVersion, b.patchVersion)] {
-            if x < y { return .orderedAscending }
-            if x > y { return .orderedDescending }
-        }
-        return .orderedSame
+    private static func isAtLeast(_ a: OperatingSystemVersion, _ b: OperatingSystemVersion) -> Bool {
+        if a.majorVersion != b.majorVersion { return a.majorVersion > b.majorVersion }
+        if a.minorVersion != b.minorVersion { return a.minorVersion > b.minorVersion }
+        return a.patchVersion >= b.patchVersion
     }
 
     static var isSupported: Bool {
         let v = current
-        return supported.contains { range in
-            compare(v, range.lowerBound) != .orderedAscending
-                && compare(v, range.upperBound) != .orderedDescending
-        }
+        return supported.contains { isAtLeast(v, $0.lower) && isAtLeast($0.upper, v) }
     }
 
     static var supportSummary: String {
-        "iOS 26.0–26.7.2, 27.0–27.2 (upstream claim; current: \(versionString))"
+        "iOS 26.0-26.7.2, 27.0-27.2 (upstream claim; current: \(versionString))"
     }
 
     /// Called before any container access. Throws rather than returning a
