@@ -74,7 +74,7 @@ struct WallpaperView: View {
                 .disabled(pickerItem == nil || isWorking || (!createDark && !createLight))
             }
         }
-        .navigationTitle(L("WALLPAPER_TITLE"))
+        .navigationTitle(L("ROOT_NEW_WALLPAPER"))
         .alert(messageIsError ? L("COMMON_ERROR") : L("WALLPAPER_CREATE_DONE_TITLE"),
                isPresented: Binding(
                 get: { message != nil }, set: { if !$0 { message = nil } })) {

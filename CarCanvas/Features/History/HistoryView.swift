@@ -11,7 +11,6 @@ struct HistoryView: View {
 
     var body: some View {
         List {
-            Section { StatusBanner() }
             Section(L("WALLPAPER_ORIGINAL")) {
                 if history.originalBackups.isEmpty {
                     Text(L("HISTORY_BACKUP_EMPTY")).foregroundStyle(.secondary)
@@ -42,6 +41,7 @@ struct HistoryView: View {
                         .font(.caption).foregroundStyle(.red)
                 }
             }
+            Section { StatusBanner() }
             if history.entries.isEmpty {
                 Text(L("HISTORY_EMPTY")).foregroundStyle(.secondary)
             } else {
