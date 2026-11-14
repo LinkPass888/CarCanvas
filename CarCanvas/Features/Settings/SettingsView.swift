@@ -6,8 +6,6 @@ struct SettingsView: View {
     @StateObject private var edits = CacheEditStore.shared
     @State private var showGuide = false
     @State private var showClear = false
-    @State private var showRespringConfirm = false
-    @State private var isRespringing = false
     @State private var showLogViewer = false
     @State private var isClearing = false
     @State private var message: String?
@@ -23,12 +21,6 @@ struct SettingsView: View {
                 Text(L("SETTINGS_GUIDE_SUBTITLE")).font(.caption).foregroundStyle(.secondary)
             }
 
-            Section(L("SETTINGS_SECTION_SESSION")) {
-                Button(L("SETTINGS_LOGOUT")) { showRespringConfirm = true }
-                    .disabled(isClearing || edits.isWorking)
-                Text(L("SETTINGS_LOGOUT_SUBTITLE")).font(.caption).foregroundStyle(.secondary)
-            }
-
             Section(L("SETTINGS_SECTION_CPBITMAP")) {
                 Picker(L("SETTINGS_CHANNEL_ORDER"), selection: $settings.channelOrder) {
                     ForEach(CPBitmapTemplate.ChannelOrder.allCases) { order in
@@ -40,7 +32,7 @@ struct SettingsView: View {
             }
 
             Section(L("SETTINGS_SECTION_ABOUT")) {
-                LabeledContent("Version", value: "2.0.0 (1)")
+                LabeledContent("Version", value: "2.0.1 (2)")
                 LabeledContent("Bundle", value: Bundle.main.bundleIdentifier ?? "-")
                 LabeledContent("App Group", value: WQAccess.shared.appGroupIdentifier ?? "NONE")
                 if entitledGroups.isEmpty {
@@ -81,9 +73,6 @@ struct SettingsView: View {
         }
         .navigationTitle(L("SETTINGS_TITLE"))
         .sheet(isPresented: $showGuide) { GuideView().environmentObject(settings) }
-        .confirmationDialog(L("SETTINGS_LOGOUT_CONFIRM_TITLE"), isPresented: $showRespringConfirm) {
-            Button(L("SETTINGS_LOGOUT"), role: .destructive) { isRespringing = true }
-        } message: { Text(L("SETTINGS_LOGOUT_CONFIRM_MESSAGE")) }
         .confirmationDialog(L("WALLPAPER_CLEAR_CONFIRM_TITLE"), isPresented: $showClear) {
             Button(L("WALLPAPER_CLEAR"), role: .destructive) { clearCache() }
         } message: { Text(L("WALLPAPER_CLEAR_CONFIRM_MESSAGE")) }
@@ -91,9 +80,6 @@ struct SettingsView: View {
                isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
             Button(L("COMMON_OK")) { message = nil }
         } message: { Text(message ?? "") }
-        .fullScreenCover(isPresented: $isRespringing) {
-            NeoSpringOverlay()
-        }
         .sheet(isPresented: $showLogViewer) {
             LogViewerView()
         }
