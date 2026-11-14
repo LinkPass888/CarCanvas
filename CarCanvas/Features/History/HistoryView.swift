@@ -3,6 +3,7 @@ import SwiftUI
 struct HistoryView: View {
     @EnvironmentObject private var history: HistoryStore
     @State private var banner: String?
+    @State private var applyingID: HistoryEntry.ID?
     @State private var showRespringConfirm = false
     @State private var isRespringing = false
 
@@ -29,8 +30,17 @@ struct HistoryView: View {
                                 }
                             }
                             Spacer()
-                            Button(L("HISTORY_APPLY")) { apply(entry) }
-                                .buttonStyle(.borderedProminent)
+                            Button {
+                                apply(entry)
+                            } label: {
+                                if applyingID == entry.id {
+                                    ProgressView().controlSize(.small)
+                                } else {
+                                    Text(L("HISTORY_APPLY"))
+                                }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(applyingID != nil)
                         }
                         .font(.footnote)
                     }
@@ -61,16 +71,28 @@ struct HistoryView: View {
 
     /// Writes this entry over the matching cache files. Both appearances were
     /// already chosen when the CPBitmap was created, so this asks nothing.
+    /// Runs off the main actor so the button can show progress while the
+    /// container is resolved and the cache is rewritten.
     private func apply(_ entry: HistoryEntry) {
-        do {
-            let targets = try ContainerResolver().resolve().files
-            let result = try CacheWriter().overwrite(entry: entry,
-                                                    targets: targets,
-                                                    dark: entry.darkFileName != nil,
-                                                    light: entry.lightFileName != nil)
-            banner = LF("HISTORY_EXPORT_CARPLAY_DONE", result.succeeded, result.failed)
-        } catch let caught {
-            banner = caught.localizedDescription
+        applyingID = entry.id
+        Task {
+            var outcome: String
+            do {
+                outcome = try await Task.detached(priority: .userInitiated) {
+                    let targets = try ContainerResolver().resolve().files
+                    let result = try CacheWriter().overwrite(entry: entry,
+                                                            targets: targets,
+                                                            dark: entry.darkFileName != nil,
+                                                            light: entry.lightFileName != nil)
+                    return LF("HISTORY_EXPORT_CARPLAY_DONE", result.succeeded, result.failed)
+                }.value
+            } catch let caught {
+                outcome = caught.localizedDescription
+            }
+            await MainActor.run {
+                banner = outcome
+                applyingID = nil
+            }
         }
     }
 

@@ -65,6 +65,65 @@ BOOL CCContainerQueryIsAvailable(void)
     return CCAPI()->valid;
 }
 
+typedef void (*CCQueryIterateFn)(void *, bool (^)(void *));
+
+/// Enumerates every container ContainerManager will hand out, by walking the
+/// classes the way WQFiles does. The bundle-id single-result query needs an
+/// identity this build does not have, which is why it returns nothing.
+NSArray<NSDictionary<NSString *, NSString *> *> *CCContainerEnumerate(void)
+{
+    const struct CCContainerAPI *api = CCAPI();
+    if (!api->handle) return @[];
+
+    CCQueryIterateFn iterate =
+        (CCQueryIterateFn)dlsym(api->handle, "container_query_iterate_results_sync");
+    if (!iterate || !api->create || !api->setClass || !api->objectGetPath) return @[];
+
+    NSMutableArray<NSDictionary<NSString *, NSString *> *> *results = [NSMutableArray array];
+    NSMutableSet<NSString *> *seen = [NSMutableSet set];
+
+    for (uint64_t cls = 1; cls <= 14; cls++) {
+        void *query = api->create();
+        if (!query) continue;
+        api->setClass(query, cls);
+        @try {
+            iterate(query, ^bool(void *object) {
+                const char *path = object ? api->objectGetPath(object) : NULL;
+                if (!path || !path[0]) return true;
+                NSString *value = [NSString stringWithUTF8String:path];
+                if (value.length == 0 || [seen containsObject:value]) return true;
+                [seen addObject:value];
+
+                // Read the identifier straight off the container directory.
+                NSString *metadata = [value stringByAppendingPathComponent:
+                                      @".com.apple.mobile_container_manager.metadata.plist"];
+                NSString *identifier = nil;
+                NSData *data = [NSData dataWithContentsOfFile:metadata];
+                if (data) {
+                    id plist = [NSPropertyListSerialization propertyListWithData:data
+                                                                        options:0
+                                                                         format:NULL
+                                                                          error:NULL];
+                    if ([plist isKindOfClass:[NSDictionary class]]) {
+                        id raw = [(NSDictionary *)plist objectForKey:@"MCMMetadataIdentifier"];
+                        if ([raw isKindOfClass:[NSString class]]) identifier = raw;
+                    }
+                }
+                if (identifier.length) {
+                    @synchronized (results) {
+                        [results addObject:@{@"path": value, @"identifier": identifier}];
+                    }
+                }
+                return true;
+            });
+        } @catch (__unused NSException *exception) {
+            // A class that refuses the query is simply skipped.
+        }
+        if (api->queryFree) api->queryFree(query);
+    }
+    return results;
+}
+
 int64_t CCConsumeContainerToken(NSString *token)
 {
     if (token.length == 0) return -255;

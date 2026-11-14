@@ -157,11 +157,16 @@ struct WallpaperView: View {
         preview.beginSearching()
         Task {
             // Heavy container work off the main actor, then publish on main.
+            // loadFromDevice() never blocks on the inode scan unless the
+            // enumeration came back completely empty, so this returns quickly.
             let loaded = await Task.detached(priority: .userInitiated) {
                 WallpaperPreviewStore.loadFromDevice()
             }.value
-            await MainActor.run { preview.apply(loaded) }
-            backup = HistoryStore.shared.backups().first
+            let newestBackup = HistoryStore.shared.backups().first
+            await MainActor.run {
+                preview.apply(loaded)
+                backup = newestBackup
+            }
         }
     }
 
@@ -198,7 +203,7 @@ struct WallpaperView: View {
                 let entry = try await Task.detached(priority: .userInitiated) {
                     try WallpaperService().createLocal(imageURL: tmp, appearances: appearances)
                 }.value
-                resultMessage = L("WALLPAPER_EXPORT_SUCCESS") + "\n" + entry.baseName
+                resultMessage = L("WALLPAPER_ADDED_TO_WALLPAPERS")
                 messageIsError = false
             } catch {
                 resultMessage = error.localizedDescription

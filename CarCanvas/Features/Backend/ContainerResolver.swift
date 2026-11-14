@@ -44,7 +44,7 @@ final class ContainerResolver {
     }
 
     /// Wallpaper caches are small; this is only for the fallback path.
-    private let scanBudget: TimeInterval = 15
+    private let scanBudget: TimeInterval = 5
 
     static func invalidateCache() { cache.invalidate() }
 
@@ -61,28 +61,17 @@ final class ContainerResolver {
         var containerPath: String?
         var route = "query"
 
-        // 1. Direct ContainerManager lookup — instant.
-        if CCContainerQueryIsAvailable() {
-            var path: NSString?
-            var token: NSString?
-            if CCContainerLookup(WQWhitelist.carPlayWallpaperBundleID, &path, &token),
-               let found = path as String?, !found.isEmpty {
-                containerPath = found
-                // ContainerManager already issued the extension. Keep the handle
-                // alive for this launch so the container stays readable, instead
-                // of dropping the token and asking worse_query for another one.
-                if let raw = token as String? {
-                    let handle = CCConsumeContainerToken(raw)
-                    CCLog.info("container query: \(found) (token handle \(handle))")
-                    if handle >= 0 { WQAccess.shared.retainContainerHandle(handle) }
-                } else {
-                    CCLog.info("container query: \(found) (no token)")
-                }
-            } else {
-                CCLog.error("container query returned nothing for \(WQWhitelist.carPlayWallpaperBundleID)")
-            }
-        } else {
-            CCLog.error("container query symbols unavailable")
+        // 1. Enumerate containers through ContainerManager. The bundle-id
+        //    single-result query needs an identity this build does not have and
+        //    always returns nothing, so enumeration is the working route.
+        route = "container enumeration"
+        let enumerated = CCContainerEnumerate()
+        CCLog.info("container enumeration: \(enumerated.count) containers")
+        for entry in enumerated {
+            guard let found = entry["path"], entry["identifier"] == WQWhitelist.carPlayWallpaperBundleID else { continue }
+            containerPath = found
+            CCLog.info("container enumeration matched: \(found)")
+            break
         }
 
         // 2. LaunchServices. Reads each installed app's dataContainerURL, so it
@@ -103,10 +92,14 @@ final class ContainerResolver {
             }
         }
 
-        // 3. Last resort: bounded inode scan over every documented root.
-        if containerPath == nil {
+        // 3. Last resort: a short bounded inode scan. Skipped entirely once
+        //    enumeration has already shown the container is not listed - that
+        //    answer will not change by walking inodes for 15 seconds.
+        if containerPath == nil, enumerated.isEmpty {
             route = "inode scan"
             containerPath = scanForContainer()
+        } else if containerPath == nil {
+            CCLog.info("skipping inode scan: enumeration listed \(enumerated.count) containers without a match")
         }
 
         guard let container = containerPath else {

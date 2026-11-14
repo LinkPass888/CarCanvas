@@ -416,11 +416,14 @@ if check(wl.is_file() and wa.is_file(), "backend whitelist + access wrapper exis
               "query symbols not resolved dynamically")
     if cr.is_file():
         crt = cr.read_text(encoding="utf-8")
-        query_at = crt.find("CCContainerLookup(")
+        enum_at = crt.find("CCContainerEnumerate(")
         scan_at = crt.find("scanForContainer()")
-        check(query_at >= 0 and scan_at > query_at,
-              "direct query is tried before the inode fallback",
-              "inode fallback runs before the direct query")
+        check(enum_at >= 0 and scan_at > enum_at,
+              "container enumeration is tried before the inode fallback",
+              "inode fallback runs before enumeration")
+        check("CCContainerEnumerate" in qm,
+              "enumeration implemented (the bundle-id query alone returns nothing)",
+              "enumeration missing; the single-result query needs an identity we lack")
 
 swift_files = [p for p in iter_repo_files() if p.suffix == ".swift"]
 ui_files = [p for p in swift_files if "/Features/" in rel(p) or "/UI/" in rel(p)]

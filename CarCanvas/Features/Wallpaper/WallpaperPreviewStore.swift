@@ -34,6 +34,11 @@ final class WallpaperPreviewStore: ObservableObject {
 
     func beginSearching() { isSearching = true }
 
+    /// Publishes the previews first and the pairing count afterwards is not
+    /// needed: the container answer is what matters, and it must clear the
+    /// spinner as soon as it is known.
+    func finishSearching() { isSearching = false }
+
     /// Applies a result produced off the main actor.
     func apply(_ loaded: Loaded) {
         darkImage = loaded.dark
