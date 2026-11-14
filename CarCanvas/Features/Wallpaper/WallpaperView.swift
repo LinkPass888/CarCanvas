@@ -18,6 +18,7 @@ struct WallpaperView: View {
     @State private var messageIsError = false
     @State private var isWorking = false
     @State private var hasLoadedOnce = false
+    @State private var backup: URL?
 
     var body: some View {
         Form {
@@ -42,29 +43,51 @@ struct WallpaperView: View {
                 Text(previewFooter)
             }
 
-            // Export name comes BEFORE the create button, so it is set first.
-            Section(L("WALLPAPER_EXPORT_FILENAME")) {
-                TextField(L("WALLPAPER_EXPORT_FILENAME_TITLE"), text: $settings.exportBaseName)
-                Text(L("WALLPAPER_EXPORT_FILENAME_FOOTER"))
-                    .font(.caption).foregroundStyle(.secondary)
+            // The untouched original, kept from the first overwrite, so an
+            // applied wallpaper can always be rolled back.
+            if let backup {
+                Section(L("WALLPAPER_ORIGINAL")) {
+                    HStack {
+                        Label(backup.lastPathComponent, systemImage: "clock.arrow.circlepath")
+                            .font(.footnote)
+                            .lineLimit(1)
+                        Spacer()
+                        Button(L("WALLPAPER_RESTORE")) { restoreOriginal(backup) }
+                            .buttonStyle(.bordered)
+                    }
+                }
             }
 
+            // Name sits at the top of the actions section, label left / field right.
             Section(L("WALLPAPER_SECTION_ACTIONS")) {
+                HStack {
+                    Text(L("WALLPAPER_FILE_NAME"))
+                    Spacer()
+                    TextField(L("WALLPAPER_FILE_NAME"), text: $settings.exportBaseName)
+                        .multilineTextAlignment(.trailing)
+                        .foregroundStyle(.secondary)
+                }
+
                 PhotosPicker(selection: $pickerItem, matching: .images) {
                     Label(L("WALLPAPER_CHOOSE"), systemImage: "photo.on.rectangle")
                 }
                 Toggle(L("WALLPAPER_SET_DARK"), isOn: $createDark)
                 Toggle(L("WALLPAPER_SET_LIGHT"), isOn: $createLight)
 
+                Text(L("WALLPAPER_NEW_CPBITMAP_FOOTER"))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            // The create action is its own full-width button.
+            Section {
                 Button {
                     createLocal()
                 } label: {
                     Label(L("WALLPAPER_NEW_CPBITMAP"), systemImage: "plus.circle")
+                        .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(.borderedProminent)
                 .disabled(pickerItem == nil || isWorking || (!createDark && !createLight))
-
-                Text(L("WALLPAPER_NEW_CPBITMAP_FOOTER"))
-                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .navigationTitle(L("WALLPAPER_TITLE"))
@@ -102,6 +125,33 @@ struct WallpaperView: View {
         return L("WALLPAPER_NO_DEVICES")
     }
 
+    private func restoreOriginal(_ backupURL: URL) {
+        isWorking = true
+        Task {
+            var outcome: String
+            var isError = false
+            do {
+                let targets = try await Task.detached(priority: .userInitiated) {
+                    try ContainerResolver().resolve().files
+                }.value
+                guard let target = targets.first(where: { backupURL.lastPathComponent.contains($0.fileName) })
+                        ?? targets.first else {
+                    throw CCError.noCacheFiles
+                }
+                try CacheWriter().restore(backup: backupURL, target: target)
+                outcome = L("WALLPAPER_RESTORED")
+            } catch let caught {
+                outcome = caught.localizedDescription
+                isError = true
+            }
+            await MainActor.run {
+                message = outcome
+                messageIsError = isError
+                isWorking = false
+            }
+        }
+    }
+
     private func refresh(forceRefresh: Bool = false) {
         if forceRefresh { ContainerResolver.invalidateCache() }
         preview.beginSearching()
@@ -111,6 +161,7 @@ struct WallpaperView: View {
                 WallpaperPreviewStore.loadFromDevice()
             }.value
             await MainActor.run { preview.apply(loaded) }
+            backup = HistoryStore.shared.backups().first
         }
     }
 

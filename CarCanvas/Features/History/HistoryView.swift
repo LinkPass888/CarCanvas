@@ -2,7 +2,6 @@ import SwiftUI
 
 struct HistoryView: View {
     @EnvironmentObject private var history: HistoryStore
-    @State private var exportEntry: HistoryEntry?
     @State private var banner: String?
     @State private var showRespringConfirm = false
     @State private var isRespringing = false
@@ -22,17 +21,18 @@ struct HistoryView: View {
                             if entry.darkFileName != nil { Label(L("WALLPAPER_SET_DARK"), systemImage: "moon") }
                             if entry.lightFileName != nil { Label(L("WALLPAPER_SET_LIGHT"), systemImage: "sun.max") }
                         }.font(.caption)
-                        // Apply and Share are separate rows: applying writes to
-                        // the device, sharing only hands the file out.
-                        Button(L("HISTORY_APPLY")) { exportEntry = entry }
-                            .buttonStyle(.borderedProminent)
-
-                        if let name = entry.darkFileName ?? entry.lightFileName {
-                            ShareLink(item: history.url(for: name)) {
-                                Label(L("HISTORY_SHARE"), systemImage: "square.and.arrow.up")
+                        // One row: Share on the left, Apply on the right.
+                        HStack {
+                            if let name = entry.darkFileName ?? entry.lightFileName {
+                                ShareLink(item: history.url(for: name)) {
+                                    Label(L("HISTORY_SHARE"), systemImage: "square.and.arrow.up")
+                                }
                             }
-                            .font(.footnote)
+                            Spacer()
+                            Button(L("HISTORY_APPLY")) { apply(entry) }
+                                .buttonStyle(.borderedProminent)
                         }
+                        .font(.footnote)
                     }
                     .swipeActions {
                         Button(role: .destructive) { history.remove(entry.id) } label: {
@@ -54,12 +54,24 @@ struct HistoryView: View {
             Text(L("SETTINGS_LOGOUT_CONFIRM_MESSAGE"))
         }
         .fullScreenCover(isPresented: $isRespringing) { NeoSpringOverlay() }
-        .sheet(item: $exportEntry) { entry in
-            ExportDestinationSheet(entry: entry) { summary in banner = summary }
-        }
         .alert(L("COMMON_ERROR"), isPresented: Binding(get: { banner != nil }, set: { if !$0 { banner = nil } })) {
             Button(L("COMMON_OK")) { banner = nil }
         } message: { Text(banner ?? "") }
+    }
+
+    /// Writes this entry over the matching cache files. Both appearances were
+    /// already chosen when the CPBitmap was created, so this asks nothing.
+    private func apply(_ entry: HistoryEntry) {
+        do {
+            let targets = try ContainerResolver().resolve().files
+            let result = try CacheWriter().overwrite(entry: entry,
+                                                    targets: targets,
+                                                    dark: entry.darkFileName != nil,
+                                                    light: entry.lightFileName != nil)
+            banner = LF("HISTORY_EXPORT_CARPLAY_DONE", result.succeeded, result.failed)
+        } catch let caught {
+            banner = caught.localizedDescription
+        }
     }
 
     private func sourceLabel(_ source: HistoryEntry.Source) -> String {

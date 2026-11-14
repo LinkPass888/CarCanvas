@@ -181,3 +181,9 @@
 "SETTINGS_LOG_COPY" = "Copy";
 "SETTINGS_LOG_COPIED" = "Copied";
 "COMMON_CLOSE" = "Close";
+"WALLPAPER_FILE_NAME" = "File name";
+"WALLPAPER_ADDED_TO_WALLPAPERS" = "Added to Wallpapers";
+"WALLPAPER_ORIGINAL" = "Original wallpaper";
+"WALLPAPER_RESTORE" = "Restore";
+"WALLPAPER_RESTORED" = "Original wallpaper restored";
+"HISTORY_APPLIED" = "Applied to CarPlay";

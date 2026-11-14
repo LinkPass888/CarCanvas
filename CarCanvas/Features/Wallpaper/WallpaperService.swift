@@ -50,10 +50,17 @@ final class WallpaperService {
         let baseName = sanitized(settings.exportBaseName)
         guard !baseName.isEmpty else { throw CCError.renderFailed }
 
+        // Same name already on disk: append " 2", " 3", ... instead of
+        // overwriting the earlier export.
+        let uniqueName = history.uniqueBaseName(from: baseName)
+        if uniqueName != baseName {
+            CCLog.info("name collision: \(baseName) -> \(uniqueName)")
+        }
+
         var last: HistoryEntry?
         for appearance in appearances where appearance != .unknown {
             last = try history.save(data: data,
-                                    baseName: baseName,
+                                    baseName: uniqueName,
                                     appearance: appearance,
                                     source: .local,
                                     sourceImageName: imageURL.lastPathComponent)

@@ -85,7 +85,25 @@ final class ContainerResolver {
             CCLog.error("container query symbols unavailable")
         }
 
-        // 2. Fallback: bounded inode scan.
+        // 2. LaunchServices. Reads each installed app's dataContainerURL, so it
+        //    needs neither a query nor an inode walk. This is the route WQFiles
+        //    uses when ContainerManager refuses.
+        if containerPath == nil {
+            route = "launchservices"
+            if CCLSIsAvailable() {
+                let all = CCLSAllContainers()
+                CCLog.info("launchservices: \(all.count) containers")
+                for (path, identifier) in all where identifier == WQWhitelist.carPlayWallpaperBundleID {
+                    containerPath = path
+                    CCLog.info("launchservices: \(path)")
+                    break
+                }
+            } else {
+                CCLog.error("launchservices unavailable")
+            }
+        }
+
+        // 3. Last resort: bounded inode scan over every documented root.
         if containerPath == nil {
             route = "inode scan"
             containerPath = scanForContainer()
@@ -103,6 +121,13 @@ final class ContainerResolver {
 
         let files = try WQAccess.shared.withAccess(containerPath: container) {
             guard let names = try? FileManager.default.contentsOfDirectory(atPath: cacheDirectory) else {
+                // The container exists but this exact cache path does not. On
+                // newer builds the mapped-image cache can live elsewhere inside
+                // the same container, so look one level up before giving up.
+                if let fallback = Self.locateWallpaperImages(inContainer: container) {
+                    CCLog.info("cache directory fallback: \(fallback)")
+                    return Self.cacheFiles(in: fallback)
+                }
                 CCLog.error("cache directory unreadable: \(cacheDirectory)")
                 throw CCError.cacheNotFound
             }
@@ -123,6 +148,52 @@ final class ContainerResolver {
         CCLog.info("cache files accepted: \(files.count) (route: \(route))")
         guard !files.isEmpty else { throw CCError.noCacheFiles }
         return Resolved(containerPath: container, cacheDirectory: cacheDirectory, files: files)
+    }
+
+    /// Searches the container for a directory that actually holds .cpbitmap
+    /// files, so a layout change in CarPlay's cache path does not break the app.
+    private static func locateWallpaperImages(inContainer container: String) -> String? {
+        let candidates = [
+            container + "/Library/Caches/MappedImageCache",
+            container + "/Library/Caches",
+            container + "/Library"
+        ]
+        let fm = FileManager.default
+        for candidate in candidates {
+            guard let entries = try? fm.contentsOfDirectory(atPath: candidate) else { continue }
+            for entry in entries where entry.lowercased().contains("wallpaper") {
+                let path = candidate + "/" + entry
+                var isDir: ObjCBool = false
+                if fm.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue {
+                    if let inner = try? fm.contentsOfDirectory(atPath: path),
+                       inner.contains(where: { $0.lowercased().hasSuffix(".cpbitmap") }) {
+                        return path
+                    }
+                }
+            }
+            // Also accept the candidate itself if it holds cache files.
+            if let inner = try? fm.contentsOfDirectory(atPath: candidate),
+               inner.contains(where: { $0.lowercased().hasSuffix(".cpbitmap") }) {
+                return candidate
+            }
+        }
+        return nil
+    }
+
+    private static func cacheFiles(in directory: String) -> [WallpaperTarget] {
+        guard let names = try? FileManager.default.contentsOfDirectory(atPath: directory) else { return [] }
+        var targets: [WallpaperTarget] = []
+        for name in names.sorted() {
+            let path = directory + "/" + name
+            var st = stat()
+            guard lstat(path, &st) == 0, (st.st_mode & UInt16(S_IFMT)) == UInt16(S_IFREG) else { continue }
+            guard name.lowercased().hasSuffix(".cpbitmap") else { continue }
+            targets.append(WallpaperTarget(path: path,
+                                           fileName: name,
+                                           appearance: WQWhitelist.appearance(of: name),
+                                           byteCount: Int(st.st_size)))
+        }
+        return targets
     }
 
     /// Bounded inode walk. Only reached when the direct query is unavailable.

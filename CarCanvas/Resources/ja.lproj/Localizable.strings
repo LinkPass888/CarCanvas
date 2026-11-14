@@ -181,3 +181,9 @@
 "SETTINGS_LOG_COPY" = "コピー";
 "SETTINGS_LOG_COPIED" = "コピーしました";
 "COMMON_CLOSE" = "閉じる";
+"WALLPAPER_FILE_NAME" = "ファイル名";
+"WALLPAPER_ADDED_TO_WALLPAPERS" = "壁紙に追加しました";
+"WALLPAPER_ORIGINAL" = "元の壁紙";
+"WALLPAPER_RESTORE" = "復元";
+"WALLPAPER_RESTORED" = "元の壁紙を復元しました";
+"HISTORY_APPLIED" = "CarPlay に適用しました";

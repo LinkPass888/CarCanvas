@@ -53,6 +53,21 @@ final class CacheWriter {
         }
     }
 
+    /// Puts a backed-up original back over a cache file. This is how the
+    /// Wallpaper screen's "restore" undoes an overwrite.
+    func restore(backup: URL, target: WallpaperTarget) throws {
+        let resolved = try ContainerResolver().resolve()
+        guard WQWhitelist.isAllowedCacheFile(target.path, in: resolved.cacheDirectory) else {
+            throw CCError.outsideWhitelist(target.path)
+        }
+        guard let payload = try? Data(contentsOf: backup) else {
+            throw CCError.templateUnreadable(backup.lastPathComponent)
+        }
+        try WQAccess.shared.withAccess(containerPath: resolved.containerPath) {
+            try payload.write(to: URL(fileURLWithPath: target.path), options: .atomic)
+        }
+    }
+
     private func data(for fileName: String?) -> Data? {
         guard let fileName else { return nil }
         return try? Data(contentsOf: history.url(for: fileName))

@@ -7,5 +7,6 @@
 #include "CCBitmapWriter.h"
 #include "CCContainerQuery.h"
 #include "CCContainerScanner.h"
+#include "CCLaunchServices.h"
 #include "worse_query.h"
 #include "pathleak.h"
