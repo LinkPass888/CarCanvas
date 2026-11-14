@@ -72,12 +72,36 @@ final class WQAccess {
         return handle
     }
 
-    /// The one scoped entry point. The closure runs while the extension is
-    /// consumed; the handle is released unconditionally afterwards.
+    /// The one scoped entry point for the CarPlayWallpaper container.
+    /// The closure runs while the extension is consumed; the handle is
+    /// released unconditionally afterwards.
     func withAccess<T>(containerPath: String, _ body: () throws -> T) throws -> T {
         try preflight()
         let handle = try consume(containerPath: containerPath)
         defer { worse_query_release(handle) }
         return try body()
+    }
+
+    /// Scoped read of the single allowed preference file. No directory is ever
+    /// granted, so this cannot be widened into a general file read.
+    func withCarPlayPreferences<T>(_ body: (Data) throws -> T) throws -> T {
+        try preflight()
+        guard let group = appGroupIdentifier else {
+            throw CCError.appGroupUnavailable("no com.apple.security.application-groups entitlement")
+        }
+        let path = WQWhitelist.carPlayPreferencesPath
+        guard WQWhitelist.isAllowedCarPlayPreferences(path) else {
+            throw CCError.outsideWhitelist(path)
+        }
+        let is26 = WQCompatibility.current.majorVersion == 26
+        // create_dir is false: the file must already exist.
+        let handle = worse_query(path, group, is26, false)
+        guard handle >= 0 else { throw CCError.accessFailed(handle) }
+        defer { worse_query_release(handle) }
+
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)) else {
+            throw CCError.templateUnreadable("com.apple.carplay.plist")
+        }
+        return try body(data)
     }
 }

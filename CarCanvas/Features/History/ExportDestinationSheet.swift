@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// Explicit per-destination confirmation. The user picks Dark and/or Light;
-/// there is no "apply to everything" and no path text field here.
+/// Explicit per-destination confirmation. The user picks Dark and/or Light.
+/// `entry` may be nil, in which case the current cache files themselves are
+/// the source (the original "Apply and export" flow).
 struct ExportDestinationSheet: View {
     @Environment(\.dismiss) private var dismiss
-    let entry: HistoryEntry
+    let entry: HistoryEntry?
     let onFinish: (String) -> Void
 
     @State private var dark = true
@@ -37,7 +38,8 @@ struct ExportDestinationSheet: View {
             .navigationTitle(L("HISTORY_EXPORT_CARPLAY"))
             .toolbar { Button(L("COMMON_CANCEL")) { dismiss() } }
             .task { loadTargets() }
-            .alert(L("COMMON_ERROR"), isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
+            .alert(L("COMMON_ERROR"), isPresented: Binding(
+                get: { error != nil }, set: { if !$0 { error = nil } })) {
                 Button(L("COMMON_OK")) { error = nil }
             } message: { Text(error ?? "") }
         }
@@ -45,13 +47,20 @@ struct ExportDestinationSheet: View {
 
     private func loadTargets() {
         do { targets = try ContainerResolver().resolve().files }
-        catch let caught { self.error = caught.localizedDescription }
+        catch let caught { error = caught.localizedDescription }
     }
 
     private func perform() {
         do {
-            let r = try CacheWriter().overwrite(entry: entry, targets: targets, dark: dark, light: light)
+            let writer = CacheWriter()
+            let r: CacheWriter.Result
+            if let entry {
+                r = try writer.overwrite(entry: entry, targets: targets, dark: dark, light: light)
+            } else {
+                r = try writer.overwriteFromCache(targets: targets, dark: dark, light: light)
+            }
             result = LF("HISTORY_EXPORT_CARPLAY_DONE", r.succeeded, r.failed)
+            onFinish(result ?? "")
         } catch let caught {
             self.error = caught.localizedDescription
         }

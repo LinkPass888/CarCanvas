@@ -3,15 +3,15 @@ import CoreGraphics
 import ImageIO
 import UniformTypeIdentifiers
 
-/// Creates local CPBitmap files from a chosen image, using an existing
-/// device cache file as the format template. Nothing is written outside
-/// this app's own Documents directory at this stage.
+/// Creates local CPBitmap files from a chosen image, using an existing device
+/// cache file as the format template. Nothing outside this app's own Documents
+/// directory is written here.
 final class WallpaperService {
     private let history = HistoryStore.shared
     private let settings = SettingsStore.shared
 
-    /// Reads the first available cache file as a template. Requires the
-    /// scoped extension, but performs a read only.
+    /// Reads the first available cache file as a template. Uses the scoped
+    /// extension but performs a read only.
     func loadTemplate() throws -> CPBitmapTemplate {
         let resolved = try ContainerResolver().resolve()
         guard let target = resolved.files.first else { throw CCError.noCacheFiles }
@@ -25,7 +25,6 @@ final class WallpaperService {
     }
 
     /// Builds Dark + Light CPBitmap files in Documents/Exports.
-    /// Does NOT touch CarPlay — see CacheWriter for the explicit overwrite.
     @discardableResult
     func createLocal(imageURL: URL,
                      appearances: Set<WallpaperTarget.Appearance>) throws -> HistoryEntry {
@@ -50,8 +49,33 @@ final class WallpaperService {
         return entry
     }
 
+    /// Copies the cache files that are currently on the device into History,
+    /// so the user has a recoverable copy before overwriting anything.
+    @discardableResult
+    func exportExistingCacheFiles(from targets: [WallpaperTarget],
+                                  baseName: String) throws -> Int {
+        let resolved = try ContainerResolver().resolve()
+        let name = sanitized(baseName)
+        guard !name.isEmpty else { throw CCError.renderFailed }
+
+        var count = 0
+        try WQAccess.shared.withAccess(containerPath: resolved.containerPath) {
+            for target in targets {
+                guard WQWhitelist.isAllowedCacheFile(target.path, in: resolved.cacheDirectory),
+                      let data = try? Data(contentsOf: URL(fileURLWithPath: target.path)) else { continue }
+                try history.save(data: data,
+                                 baseName: name,
+                                 appearance: target.appearance,
+                                 source: .carplay)
+                count += 1
+            }
+        }
+        return count
+    }
+
     private func sanitized(_ raw: String) -> String {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
-        return String(raw.unicodeScalars.filter { allowed.contains($0) }).trimmingCharacters(in: .whitespaces)
+        return String(raw.unicodeScalars.filter { allowed.contains($0) })
+            .trimmingCharacters(in: .whitespaces)
     }
 }

@@ -30,6 +30,8 @@ enum CCError: LocalizedError {
     case backupFailed
     case verificationFailed
     case nothingSelected
+    case invalidName
+    case nameTooLong
 
     var errorDescription: String? {
         switch self {
@@ -49,6 +51,8 @@ enum CCError: LocalizedError {
         case .backupFailed:         return "Backup failed; refusing to overwrite the original."
         case .verificationFailed:   return "Post-write size check failed; rolled back."
         case .nothingSelected:      return L("HISTORY_EXPORT_CARPLAY_SELECT_ONE")
+        case .invalidName:          return L("BROWSER_ERROR_INVALID_NAME")
+        case .nameTooLong:          return L("BROWSER_ERROR_NAME_TOO_LONG")
         }
     }
 }
