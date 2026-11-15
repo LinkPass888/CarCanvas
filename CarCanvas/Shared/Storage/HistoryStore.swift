@@ -184,6 +184,14 @@ final class HistoryStore: ObservableObject {
         }
     }
 
+    func originalBackup(for cacheFileName: String) throws -> OriginalBackup? {
+        guard WQAccess.hasActiveExtensionOnCurrentThread else { throw CCError.backupFailed }
+        return try storageQueue.sync {
+            guard backupIndexReadable else { throw CCError.backupFailed }
+            return storedBackups.first(where: { $0.cacheFileName == cacheFileName })
+        }
+    }
+
     func backupData(for backup: OriginalBackup) throws -> Data {
         // In particular, a queued restore cannot keep a payload captured before
         // cleanup and re-create the old cache after its backing record was purged.

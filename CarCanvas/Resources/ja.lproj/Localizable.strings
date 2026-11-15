@@ -66,6 +66,9 @@
 "GUIDE_STEP3_TITLE" = "3. 写真を選択";
 "GUIDE_STEP4_BODY" = "「適用」をタップして保留中の変更を書き込みます。";
 "GUIDE_STEP4_TITLE" = "4. 変更を適用";
+"CROP_TITLE" = "壁紙をトリミング";
+"CROP_HINT" = "写真をドラッグして残す範囲を選びます。確定しても変更は一時保存されるだけです。";
+"CROP_USE_PHOTO" = "この写真を使う";
 "GUIDE_TITLE" = "セットアップ手順";
 "HISTORY_CLEAR_ALL" = "すべて削除";
 "HISTORY_CLEAR_MESSAGE" = "保存履歴をすべて削除しますか？履歴専用のファイルも削除されます。";

@@ -32,8 +32,68 @@ final class WallpaperService {
 
     /// A selected cache supplies the fallback geometry; never substitute the
     /// first Dark/Light file or create a paired export for this single-file edit.
-    func replacementData(imageURL: URL, target: WallpaperTarget) throws -> Data {
-        try autoreleasepool { try encode(photo(at: imageURL), target: target) }
+    func targetPixelSize(for target: WallpaperTarget) throws -> CGSize {
+        try autoreleasepool { try originalReference(for: target).size }
+    }
+
+    func replacementData(imageURL: URL, target: WallpaperTarget,
+                         cropCenter: CGPoint = CGPoint(x: 0.5, y: 0.5),
+                         expectedPixelSize: CGSize? = nil) throws -> Data {
+        try prepareReplacement(imageURL: imageURL, target: target, cropCenter: cropCenter,
+                               expectedPixelSize: expectedPixelSize).data
+    }
+
+    func prepareReplacement(imageURL: URL, target: WallpaperTarget,
+                            cropCenter: CGPoint = CGPoint(x: 0.5, y: 0.5),
+                            expectedPixelSize: CGSize? = nil) throws -> (data: Data, preview: CGImage) {
+        try autoreleasepool {
+            let reference = try originalReference(for: target)
+            let size = reference.size
+            guard expectedPixelSize == nil || expectedPixelSize == size,
+                  cropCenter.x.isFinite, cropCenter.y.isFinite else { throw CCError.renderFailed }
+            let image = try croppedImage(photo(at: imageURL), size: size, center: cropCenter)
+            let data = try encode(image, fallbackData: reference.data, expectedPixelSize: size)
+            guard let preview = Self.thumbnail(image) else { throw CCError.renderFailed }
+            return (data, preview)
+        }
+    }
+
+    private func originalReference(for selected: WallpaperTarget) throws -> (data: Data, size: CGSize) {
+        let resolved = try ContainerResolver().resolve()
+        return try WQAccess.shared.withAccess(containerPath: resolved.containerPath) {
+            let files = try ContainerResolver.cacheFiles(in: resolved.cacheDirectory)
+            guard let current = files.first(where: {
+                $0.path == selected.path && $0.fileName == selected.fileName && $0.appearance == selected.appearance
+            }) else { throw CCError.templateUnreadable(selected.fileName) }
+            let data: Data, url: URL
+            if let backup = try history.originalBackup(for: current.fileName) {
+                data = try history.backupData(for: backup)
+                url = history.backupsDirectory.appendingPathComponent(backup.backupFileName)
+            } else {
+                url = URL(fileURLWithPath: current.path)
+                data = try Data(contentsOf: url)
+            }
+            if let size = CPBitmapTemplate.pixelSize(data) { return (data, size) }
+            var error: NSError?
+            guard let image = CCCopyCPBitmapImage(url, &error) else { throw CCError.renderFailed }
+            return (data, CGSize(width: CGFloat(image.width), height: CGFloat(image.height)))
+        }
+    }
+
+    private func croppedImage(_ image: CGImage, size: CGSize, center: CGPoint) throws -> CGImage {
+        let width = Int(size.width), height = Int(size.height)
+        guard width > 0, height > 0, width <= 16_384, height <= 16_384,
+              width * height <= 32 * 1024 * 1024,
+              let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
+                                      bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue)
+        else { throw CCError.renderFailed }
+        let rect = CPBitmapTemplate.aspectFillRect(imageSize: CGSize(width: CGFloat(image.width), height: CGFloat(image.height)),
+                                                  targetSize: size, center: center)
+        context.interpolationQuality = .high
+        context.draw(image, in: rect)
+        guard let cropped = context.makeImage() else { throw CCError.renderFailed }
+        return cropped
     }
 
     /// Encode each photo separately. Only after BOTH succeeded does savePair
@@ -54,13 +114,13 @@ final class WallpaperService {
 
     /// ImageIO handles real photo formats and their EXIF orientation, not
     /// CPBitmap. A pick displays immediately without retaining full pixels.
-    static func photoPreview(data: Data) -> CGImage? {
+    static func photoPreview(data: Data, maxPixelSize: Int = thumbnailDimension) -> CGImage? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
         return CGImageSourceCreateThumbnailAtIndex(source, 0, [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceThumbnailMaxPixelSize: thumbnailDimension
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
         ] as CFDictionary)
     }
 
@@ -130,7 +190,8 @@ final class WallpaperService {
     }
 
     private func encode(_ image: CGImage, fallbackTemplate: CPBitmapTemplate? = nil,
-                        target: WallpaperTarget? = nil) throws -> Data {
+                        target: WallpaperTarget? = nil, fallbackData: Data? = nil,
+                        expectedPixelSize: CGSize? = nil) throws -> Data {
         if CCBitmapWriterIsAvailable() {
             // Unique destinations and distinct UIImage instances for the two
             // photos; never reuse the first photo's bytes as the second output.
@@ -139,10 +200,12 @@ final class WallpaperService {
             var writeError: NSError?
             if CCWriteCPBitmap(image, temporary, &writeError) {
                 let data = try Data(contentsOf: temporary)
-                if CPBitmapTemplate.hasCPBitmapSignature(data) { return data }
+                if CPBitmapTemplate.hasCPBitmapSignature(data),
+                   expectedPixelSize == nil || CPBitmapTemplate.pixelSize(data) == expectedPixelSize { return data }
             }
             CCLog.info("system CPBitmap writer failed (\(writeError?.localizedDescription ?? "empty output")); using validated template")
         }
+        if let fallbackData { return try CPBitmapTemplate.parse(fallbackData).render(image: image, order: channelOrder) }
         if let fallbackTemplate { return try fallbackTemplate.render(image: image, order: channelOrder) }
         return try loadTemplate(for: target).render(image: image, order: channelOrder)
     }

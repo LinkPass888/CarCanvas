@@ -76,6 +76,24 @@ struct CPBitmapTemplate {
             .union(order == .bgra ? .byteOrder32Little : .byteOrder32Big)
     }
 
+    static func pixelSize(_ data: Data) -> CGSize? {
+        guard hasCPBitmapSignature(data) else { return nil }
+        return data.withUnsafeBytes { raw in
+            let width = UInt32(littleEndian: raw.loadUnaligned(fromByteOffset: data.count - 20, as: UInt32.self))
+            let height = UInt32(littleEndian: raw.loadUnaligned(fromByteOffset: data.count - 16, as: UInt32.self))
+            return CGSize(width: CGFloat(width), height: CGFloat(height))
+        }
+    }
+
+    /// The crop center uses the photo's top-left coordinate system.
+    static func aspectFillRect(imageSize: CGSize, targetSize: CGSize, center: CGPoint) -> CGRect {
+        let scale = max(targetSize.width / imageSize.width, targetSize.height / imageSize.height)
+        let width = imageSize.width * scale, height = imageSize.height * scale
+        let x = min(0, max(targetSize.width - width, targetSize.width / 2 - center.x * width))
+        let y = min(0, max(targetSize.height - height, targetSize.height / 2 - (1 - center.y) * height))
+        return CGRect(x: x, y: y, width: width, height: height)
+    }
+
     func render(image: CGImage, order: ChannelOrder) throws -> Data {
         var pixels = Data(count: pixelRegionLength)
         let drew = pixels.withUnsafeMutableBytes { raw -> Bool in
@@ -83,7 +101,10 @@ struct CPBitmapTemplate {
                                           bitsPerComponent: 8, bytesPerRow: alignedWidth * 4,
                                           space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: bitmapInfo(order: order).rawValue) else { return false }
             context.interpolationQuality = .high
-            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            let rect = Self.aspectFillRect(imageSize: CGSize(width: CGFloat(image.width), height: CGFloat(image.height)),
+                                           targetSize: CGSize(width: CGFloat(width), height: CGFloat(height)),
+                                           center: CGPoint(x: 0.5, y: 0.5))
+            context.draw(image, in: rect)
             return true
         }
         guard drew else { throw CCError.renderFailed }

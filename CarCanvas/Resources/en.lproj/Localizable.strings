@@ -66,6 +66,9 @@
 "GUIDE_STEP3_TITLE" = "3. Pick a photo";
 "GUIDE_STEP4_BODY" = "Tap Apply to write the pending changes.";
 "GUIDE_STEP4_TITLE" = "4. Apply changes";
+"CROP_TITLE" = "Crop Wallpaper";
+"CROP_HINT" = "Drag the photo to choose which part to keep. Confirming only stages the change.";
+"CROP_USE_PHOTO" = "Use Photo";
 "GUIDE_TITLE" = "Setup Guide";
 "HISTORY_CLEAR_ALL" = "Clear All";
 "HISTORY_CLEAR_MESSAGE" = "Delete all saved CPBitmap history entries? Files kept only in history will be removed.";

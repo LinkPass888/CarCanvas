@@ -151,6 +151,7 @@ final class CacheEditStore: ObservableObject {
 
     @MainActor
     func stagePhoto(for target: WallpaperTarget, channelOrder: CPBitmapTemplate.ChannelOrder,
+                    cropCenter: CGPoint = CGPoint(x: 0.5, y: 0.5), expectedPixelSize: CGSize? = nil,
                     loadPhoto: () async throws -> Data) async throws {
         try beginWork()
         defer { isWorking = false }
@@ -159,10 +160,10 @@ final class CacheEditStore: ObservableObject {
         try await Task.detached(priority: .userInitiated) {
             let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("cc-photo-\(UUID().uuidString).img")
             defer { try? FileManager.default.removeItem(at: temporary) }
-            guard let image = WallpaperService.photoPreview(data: data) else { throw CCError.renderFailed }
             try data.write(to: temporary, options: .atomic)
-            let payload = try WallpaperService(channelOrder: channelOrder).replacementData(imageURL: temporary, target: target)
-            try self.saveReplacement(target: target, payload: payload, thumbnail: image)
+            let prepared = try WallpaperService(channelOrder: channelOrder).prepareReplacement(
+                imageURL: temporary, target: target, cropCenter: cropCenter, expectedPixelSize: expectedPixelSize)
+            try self.saveReplacement(target: target, payload: prepared.data, thumbnail: prepared.preview)
         }.value
     }
 

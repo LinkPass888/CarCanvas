@@ -14,6 +14,9 @@ struct CarPlayBrowserView: View {
     @State private var pickedItem: PhotosPickerItem?
     @State private var pickedTarget: WallpaperTarget?
     @State private var showPhotoPicker = false
+    @State private var isPreparingCrop = false
+    @State private var preparedCrop: PhotoCropRequest?
+    @State private var cropSelection: PhotoCropRequest?
     @State private var showRestoreAllConfirm = false
     @State private var isRespringing = false
     @State private var error: String?
@@ -83,7 +86,7 @@ struct CarPlayBrowserView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 if edits.pending.isEmpty {
                     Button(L("BROWSER_RETRY")) { Task { await store.load(forceRefresh: true) } }
-                        .disabled(edits.isWorking || store.isLoading || !edits.isReady)
+                        .disabled(edits.isWorking || store.isLoading || !edits.isReady || isPreparingCrop || preparedCrop != nil || cropSelection != nil)
                 } else {
                     Button { apply() } label: {
                         Text(L("HISTORY_APPLY"))
@@ -97,7 +100,7 @@ struct CarPlayBrowserView: View {
                             }
                     }
                     .accessibilityLabel(LF("CACHE_APPLY_COUNT", edits.pending.count))
-                    .disabled(edits.isWorking || store.isLoading || !edits.isReady)
+                    .disabled(edits.isWorking || store.isLoading || !edits.isReady || isPreparingCrop || preparedCrop != nil || cropSelection != nil)
                 }
             }
         }
@@ -106,14 +109,15 @@ struct CarPlayBrowserView: View {
         .photosPicker(isPresented: $showPhotoPicker, selection: $pickedItem, matching: .images)
         .onChange(of: pickedItem) { _, item in
             guard let item, let target = pickedTarget else { return }
-            let order = settings.channelOrder
-            Task {
-                do {
-                    try await edits.stagePhoto(for: target, channelOrder: order) {
-                        guard let data = try await item.loadTransferable(type: Data.self) else { throw CCError.renderFailed }
-                        return data
-                    }
-                } catch { self.error = error.localizedDescription }
+            prepareCrop(item: item, target: target, channelOrder: settings.channelOrder)
+        }
+        .onChange(of: showPhotoPicker) { _, presented in
+            if !presented { Task { await Task.yield(); presentPreparedCrop() } }
+        }
+        .sheet(item: $cropSelection) { request in
+            PhotoCropView(image: request.preview, targetPixelSize: request.pixelSize) { center in
+                try await edits.stagePhoto(for: request.target, channelOrder: request.channelOrder,
+                                           cropCenter: center, expectedPixelSize: request.pixelSize) { request.data }
             }
         }
         .confirmationDialog(L("CACHE_RESTORE_ALL_TITLE"), isPresented: $showRestoreAllConfirm) {
@@ -125,6 +129,33 @@ struct CarPlayBrowserView: View {
         })) {
             Button(L("COMMON_OK")) { error = nil; store.error = nil }
         } message: { Text(error ?? store.error ?? "") }
+    }
+
+    private func prepareCrop(item: PhotosPickerItem, target: WallpaperTarget,
+                             channelOrder: CPBitmapTemplate.ChannelOrder) {
+        guard !isPreparingCrop else { return }
+        isPreparingCrop = true
+        Task {
+            defer { isPreparingCrop = false; pickedItem = nil; pickedTarget = nil }
+            do {
+                guard let data = try await item.loadTransferable(type: Data.self) else { throw CCError.renderFailed }
+                let prepared = try await Task.detached(priority: .userInitiated) {
+                    guard let preview = WallpaperService.photoPreview(data: data, maxPixelSize: 1600) else { throw CCError.renderFailed }
+                    let size = try WallpaperService(channelOrder: channelOrder).targetPixelSize(for: target)
+                    return (preview, size)
+                }.value
+                preparedCrop = PhotoCropRequest(target: target, data: data, preview: prepared.0,
+                                                pixelSize: prepared.1, channelOrder: channelOrder)
+                await Task.yield()
+                presentPreparedCrop()
+            } catch { self.error = error.localizedDescription }
+        }
+    }
+
+    private func presentPreparedCrop() {
+        guard !showPhotoPicker, let preparedCrop else { return }
+        cropSelection = preparedCrop
+        self.preparedCrop = nil
     }
 
     private func hasPending(_ target: WallpaperTarget) -> Bool {
@@ -144,7 +175,8 @@ struct CarPlayBrowserView: View {
     }
 
     private func canPick(_ target: WallpaperTarget) -> Bool {
-        edits.isReady && !edits.isWorking && !store.isLoading
+        edits.isReady && !edits.isWorking && !store.isLoading && !isPreparingCrop
+            && !showPhotoPicker && preparedCrop == nil && cropSelection == nil
             && store.targets.contains(where: { $0.path == target.path })
             && !history.backupFailures.contains(target.fileName)
     }

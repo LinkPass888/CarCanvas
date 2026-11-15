@@ -66,6 +66,9 @@
 "GUIDE_STEP3_TITLE" = "3. 选择照片";
 "GUIDE_STEP4_BODY" = "点“应用”，写入待处理修改。";
 "GUIDE_STEP4_TITLE" = "4. 应用修改";
+"CROP_TITLE" = "裁剪壁纸";
+"CROP_HINT" = "拖动照片调整保留的区域，确认后仅暂存。";
+"CROP_USE_PHOTO" = "使用照片";
 "GUIDE_TITLE" = "设置指南";
 "HISTORY_CLEAR_ALL" = "全部清除";
 "HISTORY_CLEAR_MESSAGE" = "要删除所有已保存的 CPBitmap 历史记录吗？仅保留在历史记录中的文件也会被删除。";
