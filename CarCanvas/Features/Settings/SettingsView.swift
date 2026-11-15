@@ -32,7 +32,7 @@ struct SettingsView: View {
             }
 
             Section(L("SETTINGS_SECTION_ABOUT")) {
-                LabeledContent("Version", value: "2.0.0 (2)")
+                LabeledContent("Version", value: "2.0.1 (3)")
                 LabeledContent("Bundle", value: Bundle.main.bundleIdentifier ?? "-")
                 LabeledContent("App Group", value: WQAccess.shared.appGroupIdentifier ?? "NONE")
                 if entitledGroups.isEmpty {
