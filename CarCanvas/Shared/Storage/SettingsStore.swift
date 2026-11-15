@@ -29,11 +29,10 @@ final class SettingsStore: ObservableObject {
     }
 
     func clearSavedData() {
-        for key in [Keys.exportBaseName, Keys.channelOrder, Keys.guide] {
+        for key in [Keys.exportBaseName, Keys.channelOrder] {
             defaults.removeObject(forKey: key)
         }
         exportBaseName = "CarCanvas"
         channelOrder = .bgra
-        hasSeenGuide = false
     }
 }

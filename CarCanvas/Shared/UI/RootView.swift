@@ -3,6 +3,7 @@ import SwiftUI
 /// Cache management and settings; photo replacement starts on the cache itself.
 struct RootView: View {
     @EnvironmentObject private var settings: SettingsStore
+    @State private var showGuide = false
 
     var body: some View {
         TabView {
@@ -12,12 +13,14 @@ struct RootView: View {
             NavigationStack { SettingsView() }
                 .tabItem { Label(L("ROOT_SETTINGS"), systemImage: "gearshape") }
         }
-        .sheet(isPresented: Binding(
-            get: { !settings.hasSeenGuide },
-            set: { if !$0 { settings.hasSeenGuide = true } }
-        )) {
+        .sheet(isPresented: $showGuide) {
             GuideView()
                 .environmentObject(settings)
+        }
+        .onAppear {
+            guard !settings.hasSeenGuide else { return }
+            settings.hasSeenGuide = true
+            showGuide = true
         }
     }
 }

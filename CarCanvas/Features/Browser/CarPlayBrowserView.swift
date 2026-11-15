@@ -29,7 +29,7 @@ struct CarPlayBrowserView: View {
     var body: some View {
         List {
             Section { StatusBanner() }
-            Section(L("BROWSER_TITLE")) {
+            Section {
                 if store.isLoading || (!edits.isReady && edits.loadError == nil) { ProgressView(L("BROWSER_LOADING")) }
                 if let loadError = edits.loadError { Text(loadError).font(.caption).foregroundStyle(.red) }
                 if !store.isLoading && displayedTargets.isEmpty {
@@ -42,8 +42,13 @@ struct CarPlayBrowserView: View {
                                    onPick: { pick(target) }, onRestore: { restore(target) },
                                    onClear: { clear(target) })
                 }
-                Text(L("CACHE_EDIT_PICK_HINT")).font(.caption).foregroundStyle(.secondary)
                 if edits.isWorking { ProgressView(L("COMMON_PLEASE_WAIT")) }
+            } header: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(L("BROWSER_TITLE"))
+                    Text(L("CACHE_EDIT_PICK_HINT"))
+                        .font(.caption).foregroundStyle(.secondary).textCase(nil)
+                }
             }
             Section {
                 if history.originalBackups.isEmpty {
