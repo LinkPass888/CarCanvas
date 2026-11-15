@@ -27,19 +27,27 @@ struct PhotoCropView: View {
                 Text(L("CROP_HINT")).font(.footnote).foregroundStyle(.secondary)
                 GeometryReader { proxy in
                     let ratio = targetPixelSize.width / targetPixelSize.height
-                    let width = max(1, min(proxy.size.width, proxy.size.height * ratio))
+                    let width = max(1, min(proxy.size.width * 0.8, proxy.size.height * 0.8 * ratio))
                     let frame = CGSize(width: width, height: width / ratio)
                     let scale = max(frame.width / CGFloat(image.width), frame.height / CGFloat(image.height))
                     let scaled = CGSize(width: CGFloat(image.width) * scale, height: CGFloat(image.height) * scale)
                     let offset = clampedOffset(scaled: scaled, frame: frame, translation: dragOffset)
-                    Image(decorative: image, scale: 1)
-                        .resizable()
-                        .frame(width: scaled.width, height: scaled.height)
-                        .offset(x: offset.width, y: offset.height)
-                        .frame(width: frame.width, height: frame.height)
+                    ZStack {
+                        Image(decorative: image, scale: 1)
+                            .resizable()
+                            .frame(width: scaled.width, height: scaled.height)
+                            .offset(x: offset.width, y: offset.height)
+                        Path { path in
+                            path.addRect(CGRect(origin: .zero, size: proxy.size))
+                            path.addRect(CGRect(x: (proxy.size.width - frame.width) / 2,
+                                                y: (proxy.size.height - frame.height) / 2,
+                                                width: frame.width, height: frame.height))
+                        }.fill(Color(uiColor: .systemBackground).opacity(0.6), style: FillStyle(eoFill: true))
+                        Rectangle().stroke(Color.secondary, lineWidth: 1)
+                            .frame(width: frame.width, height: frame.height)
+                    }
+                        .frame(width: proxy.size.width, height: proxy.size.height)
                         .clipped()
-                        .background(Color(uiColor: .secondarySystemBackground))
-                        .overlay(Rectangle().stroke(Color.secondary, lineWidth: 1))
                         .contentShape(Rectangle())
                         .gesture(DragGesture()
                             .updating($dragOffset) { value, state, _ in state = value.translation }
@@ -48,7 +56,6 @@ struct PhotoCropView: View {
                                 center = CGPoint(x: 0.5 - offset.width / scaled.width,
                                                  y: 0.5 - offset.height / scaled.height)
                             }, including: isSaving ? .none : .all)
-                        .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
                 }
             }
             .padding(20)

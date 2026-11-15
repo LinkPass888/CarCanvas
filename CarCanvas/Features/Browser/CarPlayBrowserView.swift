@@ -258,8 +258,10 @@ private struct CacheTargetRow: View {
             HStack(spacing: 12) {
                 Button(action: onPick) {
                     Group {
-                        if let previewImage { Image(decorative: previewImage, scale: 1).resizable().scaledToFit() }
-                        else {
+                        if let previewImage {
+                            Image(decorative: previewImage, scale: 1).resizable().scaledToFit()
+                                .background(Color(uiColor: .tertiarySystemFill), in: RoundedRectangle(cornerRadius: 8))
+                        } else {
                             VStack(spacing: 4) {
                                 Image(systemName: "photo.badge.exclamationmark")
                                 Text(L("BROWSER_PREVIEW_FAILED")).font(.caption2)
@@ -267,7 +269,11 @@ private struct CacheTargetRow: View {
                         }
                     }
                     .frame(width: 144, height: 80, alignment: .leading)
-                    .background(Color(uiColor: .tertiarySystemFill), in: RoundedRectangle(cornerRadius: 8))
+                    .background {
+                        if previewImage == nil {
+                            RoundedRectangle(cornerRadius: 8).fill(Color(uiColor: .tertiarySystemFill))
+                        }
+                    }
                 }
                 .buttonStyle(.plain).disabled(!canPick)
                 .accessibilityLabel(LF("CACHE_EDIT_PICK_FILE", target.fileName))
