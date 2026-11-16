@@ -95,12 +95,10 @@ struct CarPlayBrowserView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button(L("BROWSER_RETRY")) { Task { await store.load(forceRefresh: true) } }
-                    .disabled(edits.isWorking || store.isLoading || !edits.isReady || isPreparingCrop
-                              || showPhotoPicker || preparedCrop != nil || cropSelection != nil)
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                if !currentPending.isEmpty {
+                if currentPending.isEmpty {
+                    Button(L("BROWSER_RETRY")) { Task { await store.load(forceRefresh: true) } }
+                        .disabled(edits.isWorking || store.isLoading || !edits.isReady || isPreparingCrop || preparedCrop != nil || cropSelection != nil)
+                } else {
                     Button { apply() } label: {
                         Text(L("HISTORY_APPLY"))
                             .padding(.trailing, 6)

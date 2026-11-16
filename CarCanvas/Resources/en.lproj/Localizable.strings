@@ -58,7 +58,7 @@
 "GUIDE_DONE" = "Got It";
 "GUIDE_FOOTER" = "Reloading may close other apps. Save your work first and check the result on the CarPlay screen.";
 "GUIDE_HEADER" = "CarPlay / Settings";
-"GUIDE_STEP1_BODY" = "In CarPlay Settings → Wallpaper, select each of the six patterned wallpapers in the top two rows to generate the cache.";
+"GUIDE_STEP1_BODY" = "Select a patterned wallpaper in CarPlay Settings → Wallpaper to generate the cache. The system caches at most six wallpapers.";
 "GUIDE_STEP1_TITLE" = "1. Prepare the cache";
 "GUIDE_STEP2_BODY" = "Open CarCanvas’s CarPlay tab and tap Retry.";
 "GUIDE_STEP2_TITLE" = "2. Retry in CarCanvas";

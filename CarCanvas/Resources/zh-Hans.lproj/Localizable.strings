@@ -58,7 +58,7 @@
 "GUIDE_DONE" = "知道了";
 "GUIDE_FOOTER" = "注销可能关闭其他应用，请先保存工作。效果请在 CarPlay 屏幕确认。";
 "GUIDE_HEADER" = "CarPlay / 设置";
-"GUIDE_STEP1_BODY" = "在 CarPlay 设置 → 壁纸中，将上两排 6 张图案壁纸各选一次，生成缓存。";
+"GUIDE_STEP1_BODY" = "在 CarPlay 设置 → 壁纸中选择图案壁纸，生成缓存。系统最多只缓存 6 个壁纸。";
 "GUIDE_STEP1_TITLE" = "1. 准备缓存";
 "GUIDE_STEP2_BODY" = "打开 CarCanvas 的 CarPlay 页，点“重试”。";
 "GUIDE_STEP2_TITLE" = "2. 回到 CarCanvas 重试";

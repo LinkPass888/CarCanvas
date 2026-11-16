@@ -19,7 +19,7 @@ Replace CarPlay wallpapers with your own photos, with original-cache backup and 
 
 ## Quick start
 
-1. In CarPlay **Settings → Wallpaper**, select each of the six patterned wallpapers in the top two rows to generate the cache.
+1. In CarPlay **Settings → Wallpaper**, pick a patterned wallpaper to generate the cache. **The system caches at most six wallpapers.**
 
    ![CarPlay wallpaper picker](docs/carplay-wallpaper-picker.png)
 
@@ -27,6 +27,11 @@ Replace CarPlay wallpapers with your own photos, with original-cache backup and 
 3. Tap the target file's preview and choose a photo. Each file is edited independently; changes are staged locally.
 4. Tap **Apply** to write the pending changes.
 5. After the interface reload, reconnect CarPlay to view the wallpaper.
+
+## Known limitations
+
+- **Vehicle separation is not possible.** CarPlay's pairing list lives in `/var/mobile/Library/Preferences/com.apple.carplay.plist`, which is outside every app container. The `worse_query` primitive only issues a sandbox extension for container paths, and `cfprefsd` refuses the domain, so the app cannot tell which cache belongs to which vehicle. All caches are listed together.
+- **At most six cached wallpapers.** CarPlay keeps the wallpapers currently selected in its picker, so the cache directory holds up to six files rather than every wallpaper you have ever used.
 
 ## Backup and maintenance
 

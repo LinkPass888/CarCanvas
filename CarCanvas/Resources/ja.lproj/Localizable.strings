@@ -58,7 +58,7 @@
 "GUIDE_DONE" = "了解";
 "GUIDE_FOOTER" = "再読み込みで他のアプリが閉じる場合があります。先に作業を保存し、CarPlayで結果を確認してください。";
 "GUIDE_HEADER" = "CarPlay / 設定";
-"GUIDE_STEP1_BODY" = "CarPlay の設定 → 壁紙で、上 2 段の模様付き壁紙 6 枚を一度ずつ選び、キャッシュを生成します。";
+"GUIDE_STEP1_BODY" = "CarPlay の設定 → 壁紙で模様付き壁紙を選ぶとキャッシュが生成されます。キャッシュは最大 6 枚までです。";
 "GUIDE_STEP1_TITLE" = "1. キャッシュを準備";
 "GUIDE_STEP2_BODY" = "CarCanvas の CarPlay タブで「再試行」をタップします。";
 "GUIDE_STEP2_TITLE" = "2. CarCanvas で再試行";
