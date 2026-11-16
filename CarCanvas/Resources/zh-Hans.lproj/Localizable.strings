@@ -71,11 +71,12 @@
 "CROP_USE_PHOTO" = "使用照片";
 "VEHICLE_MENU" = "车机";
 "VEHICLE_UNNAMED" = "未命名车机 %ld";
-"VEHICLE_RECORDS_UNAVAILABLE" = "无法读取车机记录，暂不混合展示缓存。";
+"VEHICLE_RECORDS_UNAVAILABLE" = "无法读取车机记录，本次不按车机筛选，直接展示全部缓存。";
 "VEHICLE_RECORDS_EMPTY" = "没有保存的车机记录，请先连接 CarPlay 后重试。";
 "VEHICLE_NO_CACHE_MATCH" = "无法确认所选车机的缓存归属，其他缓存不会混入本车列表。";
 "VEHICLE_SHARED_CACHE" = "所选车机与其他车机引用了相同缓存，无法作为独立缓存修改。";
 "VEHICLE_CACHE_SCOPE_HINT" = "仅展示所选车机记录直接引用且未共享的缓存；未确认归属的缓存不混入本车列表。";
+"VEHICLE_UNKNOWN_OWNER" = "未按车机筛选：无法确认缓存归属，请只修改你自己确认过的壁纸。";
 "CROP_WIDTH" = "宽度（像素）";
 "CROP_HEIGHT" = "高度（像素）";
 "CROP_SIZE_HINT" = "建议输入车辆 CarPlay 窗口尺寸（像素），以获得更好的体验。";

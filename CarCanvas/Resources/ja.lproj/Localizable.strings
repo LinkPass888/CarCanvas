@@ -71,11 +71,12 @@
 "CROP_USE_PHOTO" = "この写真を使う";
 "VEHICLE_MENU" = "車載機";
 "VEHICLE_UNNAMED" = "名前のない車載機 %ld";
-"VEHICLE_RECORDS_UNAVAILABLE" = "車載機の記録を読み取れません。キャッシュは混在させません。";
+"VEHICLE_RECORDS_UNAVAILABLE" = "車載機の記録を読み取れません。今回は車載機で絞り込まず、すべてのキャッシュを表示します。";
 "VEHICLE_RECORDS_EMPTY" = "保存された車載機の記録がありません。CarPlay に接続して再試行してください。";
 "VEHICLE_NO_CACHE_MATCH" = "選択した車載機のキャッシュを確認できません。他のキャッシュは含めません。";
 "VEHICLE_SHARED_CACHE" = "この車載機は他の車載機と同じキャッシュを参照しています。独立したキャッシュとして変更できません。";
 "VEHICLE_CACHE_SCOPE_HINT" = "選択した車載機の記録から直接参照され、共有されていないキャッシュのみ表示します。未確認のキャッシュは混在させません。";
+"VEHICLE_UNKNOWN_OWNER" = "車載機で絞り込みません：キャッシュの帰属を確認できません。ご自身で確認できた壁紙のみ変更してください。";
 "CROP_WIDTH" = "幅（ピクセル）";
 "CROP_HEIGHT" = "高さ（ピクセル）";
 "CROP_SIZE_HINT" = "より快適に使用するため、車の CarPlay 表示領域のサイズをピクセル単位で入力してください。";

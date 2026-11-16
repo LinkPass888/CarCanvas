@@ -26,8 +26,14 @@ struct CarPlayBrowserView: View {
         store.devices.first(where: { $0.id == selectedDeviceID }) ?? store.devices.first
     }
 
+    /// Vehicle records can fail to load while the cache scan succeeds: the
+    /// preference file is not a container path, so no extension is issued for
+    /// it. Filtering by an empty device list would then hide every cache the
+    /// scan just found, so an unknown owner shows all of them instead.
     private var currentFileNames: Set<String> {
-        guard let selectedDevice else { return [] }
+        guard let selectedDevice else {
+            return Set(store.targets.map(\.fileName)).union(edits.pending.map { $0.target.fileName })
+        }
         let otherNames = Set(store.devices.filter { $0.id != selectedDevice.id }.flatMap { $0.cacheFileNames })
         return selectedDevice.cacheFileNames.subtracting(otherNames)
     }
@@ -90,8 +96,10 @@ struct CarPlayBrowserView: View {
                 if let loadError = edits.loadError { Text(loadError).font(.caption).foregroundStyle(.red) }
                 if !store.isLoading {
                     if let deviceError = store.deviceError {
-                        Text(L("VEHICLE_RECORDS_UNAVAILABLE") + " " + deviceError)
-                            .font(.caption).foregroundStyle(.red)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L("VEHICLE_RECORDS_UNAVAILABLE") + " " + deviceError)
+                            Text(L("VEHICLE_UNKNOWN_OWNER"))
+                        }.font(.caption).foregroundStyle(.red)
                     } else if store.devices.isEmpty {
                         Text(L("VEHICLE_RECORDS_EMPTY")).foregroundStyle(.secondary)
                     } else if hasSharedCache {
