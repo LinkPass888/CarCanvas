@@ -8,14 +8,7 @@ extension Notification.Name {
 /// The only writer outside our sandbox. Every operation resolves BEFORE its
 /// synchronous, serialized WQ scope, then revalidates the exact fixed paths.
 final class CacheWriter {
-    struct Result { let succeeded: Int; let failed: Int }
     private let history = HistoryStore.shared
-
-    private struct Replacement {
-        let target: WallpaperTarget
-        let payload: Data
-        let current: Data
-    }
 
     /// Restore is staged as metadata + a thumbnail, not as a captured payload.
     /// Apply must re-read and validate the original inside its own write scope.
@@ -112,81 +105,6 @@ final class CacheWriter {
         }
     }
 
-    /// Legacy group exports remain readable but are no longer reachable from
-    /// the UI. Cache-photo edits above never call this paired writer.
-    /// A singular group is the entire destination contract. Incomplete groups
-    /// write only their existing member, and legacy one-file exports can supply
-    /// that member. A corrupt/missing named counterpart is NOT another photo.
-    func overwrite(entry: HistoryEntry, group: WallpaperGroup) throws -> Result {
-        guard group.isReplaceable else { throw CCError.nothingSelected }
-        let resolved = try ContainerResolver().resolve()
-        var changed = false
-        defer { if changed { announceCacheChange() } }
-        return try WQAccess.shared.withAccess(containerPath: resolved.containerPath) {
-            let currentFiles = try ContainerResolver.cacheFiles(in: resolved.cacheDirectory)
-            guard let currentGroup = WallpaperGroup.make(from: currentFiles).first(where: { $0.id == group.id }),
-                  currentGroup.isReplaceable,
-                  Set(currentGroup.targets.map(\.path)) == Set(group.targets.map(\.path)),
-                  group.targets.allSatisfy({ selected in
-                      currentGroup.targets.contains { $0.path == selected.path && $0.fileName == selected.fileName && $0.appearance == selected.appearance }
-                  }) else { throw failure(L("HISTORY_GROUP_CHANGED")) }
-
-            // Prepare BOTH payloads, originals and rollback copies before any
-            // member is written. Never expand a selection to another group.
-            let replacements = try currentGroup.targets.map { target -> Replacement in
-                let payload = try exportData(for: target, entry: entry)
-                try history.ensureOriginal(for: target)
-                guard let current = try existingData(at: target.path) else { throw CCError.noCacheFiles }
-                return Replacement(target: target, payload: payload, current: current)
-            }
-            var written: [Replacement] = []
-            do {
-                for replacement in replacements {
-                    guard try existingData(at: replacement.target.path) == replacement.current else { throw failure(L("HISTORY_GROUP_CHANGED")) }
-                    changed = true
-                    try writeVerified(replacement.payload, to: replacement.target, rollback: replacement.current)
-                    written.append(replacement)
-                }
-            } catch {
-                var rollbackFailed = false
-                for replacement in written.reversed() {
-                    do {
-                        // Do not clobber a file another process has regenerated.
-                        guard try existingData(at: replacement.target.path) == replacement.payload else { throw CCError.verificationFailed }
-                        try writeVerified(replacement.current, to: replacement.target, rollback: replacement.payload)
-                    } catch let rollbackError {
-                        rollbackFailed = true
-                        CCLog.error("group rollback failed for \(replacement.target.fileName): \(rollbackError.localizedDescription)")
-                    }
-                }
-                if rollbackFailed { throw failure(LF("HISTORY_BACKUP_ROLLBACK_FAILED", error.localizedDescription)) }
-                throw error
-            }
-            return Result(succeeded: replacements.count, failed: 0)
-        }
-    }
-
-    /// The exact whitelist filename may be absent, but its original must still
-    /// be valid at WRITE-SCOPE time. A queued pre-cleanup payload cannot revive it.
-    func restore(backup: HistoryStore.OriginalBackup) throws {
-        let resolved = try ContainerResolver().resolve()
-        var attemptedWrite = false
-        defer { if attemptedWrite { announceCacheChange() } }
-        let path = resolved.cacheDirectory + "/" + backup.cacheFileName
-        guard WQWhitelist.isAllowedCacheFile(path, in: resolved.cacheDirectory) else { throw CCError.outsideWhitelist(path) }
-        try WQAccess.shared.withAccess(containerPath: resolved.containerPath) {
-            guard try WQWhitelist.cacheDirectoryExists(resolved.cacheDirectory) else {
-                throw failure(LF("HISTORY_BACKUP_TARGET_MISSING", backup.cacheFileName))
-            }
-            let payload = try history.backupData(for: backup)
-            let current = try existingData(at: path)
-            let target = WallpaperTarget(path: path, fileName: backup.cacheFileName,
-                                         appearance: WQWhitelist.appearance(of: backup.cacheFileName), byteCount: current?.count ?? 0)
-            attemptedWrite = true
-            try writeVerified(payload, to: target, rollback: current)
-        }
-    }
-
     /// Truly clear only regular, whitelist-named files in the identified fixed
     /// cache, then ALL app Backups/legacy copies/index. No prefs/pairings, cache
     /// directory, Exports/history, automatic logout or permanent rollback copy.
@@ -221,7 +139,7 @@ final class CacheWriter {
             do {
                 for target in targets {
                     let copy = temporary.appendingPathComponent(target.fileName)
-                    guard try existingData(at: target.path) == Data(contentsOf: copy) else { throw failure(L("HISTORY_GROUP_CHANGED")) }
+                    guard try existingData(at: target.path) == Data(contentsOf: copy) else { throw failure(L("CACHE_EDIT_TARGET_CHANGED")) }
                     try manager.removeItem(atPath: target.path)
                     removed.append(target)
                     changed = true
@@ -263,15 +181,6 @@ final class CacheWriter {
                 throw error
             }
         }
-    }
-
-    private func exportData(for target: WallpaperTarget, entry: HistoryEntry) throws -> Data {
-        let name = target.isDark ? (entry.darkFileName ?? entry.lightFileName) : (entry.lightFileName ?? entry.darkFileName)
-        guard let name, name == (name as NSString).lastPathComponent, name.hasSuffix(".cpbitmap"),
-              let data = try existingData(at: history.url(for: name).path), CPBitmapTemplate.hasCPBitmapSignature(data) else {
-            throw CCError.templateUnreadable(entry.baseName)
-        }
-        return data
     }
 
     private func existingData(at path: String) throws -> Data? {

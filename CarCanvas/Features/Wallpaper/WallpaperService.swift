@@ -2,7 +2,7 @@ import Foundation
 import CoreGraphics
 import ImageIO
 
-/// Local creation is independent of applying a specifically selected cache group.
+/// Previews and replacements for an explicitly selected single cache file.
 final class WallpaperService {
     private let history = HistoryStore.shared
     private let channelOrder: CPBitmapTemplate.ChannelOrder
@@ -12,35 +12,10 @@ final class WallpaperService {
         self.channelOrder = channelOrder
     }
 
-    func loadTemplate(for selected: WallpaperTarget? = nil) throws -> CPBitmapTemplate {
-        let resolved = try ContainerResolver().resolve()
-        return try WQAccess.shared.withAccess(containerPath: resolved.containerPath) {
-            let files = try ContainerResolver.cacheFiles(in: resolved.cacheDirectory)
-            let target: WallpaperTarget
-            if let selected {
-                guard let current = files.first(where: {
-                    $0.path == selected.path && $0.fileName == selected.fileName && $0.appearance == selected.appearance
-                }) else { throw CCError.templateUnreadable(selected.fileName) }
-                target = current
-            } else {
-                guard let first = files.first else { throw CCError.noCacheFiles }
-                target = first
-            }
-            return try CPBitmapTemplate.parse(Data(contentsOf: URL(fileURLWithPath: target.path)))
-        }
-    }
-
     /// A selected cache supplies the fallback geometry; never substitute the
     /// first Dark/Light file or create a paired export for this single-file edit.
     func targetPixelSize(for target: WallpaperTarget) throws -> CGSize {
         try autoreleasepool { try originalReference(for: target).size }
-    }
-
-    func replacementData(imageURL: URL, target: WallpaperTarget,
-                         cropCenter: CGPoint = CGPoint(x: 0.5, y: 0.5),
-                         expectedPixelSize: CGSize? = nil, outputPixelSize: CGSize? = nil) throws -> Data {
-        try prepareReplacement(imageURL: imageURL, target: target, cropCenter: cropCenter,
-                               expectedPixelSize: expectedPixelSize, outputPixelSize: outputPixelSize).data
     }
 
     func prepareReplacement(imageURL: URL, target: WallpaperTarget,
@@ -99,22 +74,6 @@ final class WallpaperService {
         context.draw(image, in: rect)
         guard let cropped = context.makeImage() else { throw CCError.renderFailed }
         return cropped
-    }
-
-    /// Encode each photo separately. Only after BOTH succeeded does savePair
-    /// reserve one base name and commit two files plus one HistoryEntry.
-    @discardableResult
-    func createLocal(darkImageURL: URL, lightImageURL: URL, baseName rawName: String) throws -> HistoryEntry {
-        let baseName = sanitized(rawName)
-        guard !baseName.isEmpty else { throw CCError.renderFailed }
-        let darkData = try autoreleasepool { try encode(photo(at: darkImageURL)) }
-        // If the second system call is unavailable/refused, the first VALID
-        // output itself supplies the geometry/metadata, even before CarPlay has
-        // a cache. Render the second photo; never copy the first photo's pixels.
-        let localTemplate = try? CPBitmapTemplate.parse(darkData)
-        let lightData = try autoreleasepool { try encode(photo(at: lightImageURL), fallbackTemplate: localTemplate) }
-        return try history.savePair(darkData: darkData, lightData: lightData, baseName: baseName,
-                                    sourceImageName: "\(darkImageURL.lastPathComponent) / \(lightImageURL.lastPathComponent)")
     }
 
     /// ImageIO handles real photo formats and their EXIF orientation, not
@@ -197,36 +156,25 @@ final class WallpaperService {
         return context.makeImage()
     }
 
-    private func encode(_ image: CGImage, fallbackTemplate: CPBitmapTemplate? = nil,
-                        target: WallpaperTarget? = nil, fallbackData: Data? = nil,
-                        expectedPixelSize: CGSize? = nil) throws -> Data {
+    /// A writer failure may only fall back to the selected file's original.
+    private func encode(_ image: CGImage, fallbackData: Data,
+                        expectedPixelSize: CGSize) throws -> Data {
         if CCBitmapWriterIsAvailable() {
-            // Unique destinations and distinct UIImage instances for the two
-            // photos; never reuse the first photo's bytes as the second output.
             let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("cc-bitmap-\(UUID().uuidString).cpbitmap")
             defer { try? FileManager.default.removeItem(at: temporary) }
             var writeError: NSError?
             if CCWriteCPBitmap(image, temporary, &writeError) {
                 let data = try Data(contentsOf: temporary)
                 if CPBitmapTemplate.hasCPBitmapSignature(data),
-                   expectedPixelSize == nil || CPBitmapTemplate.pixelSize(data) == expectedPixelSize { return data }
+                   CPBitmapTemplate.pixelSize(data) == expectedPixelSize { return data }
             }
             CCLog.info("system CPBitmap writer failed (\(writeError?.localizedDescription ?? "empty output")); using validated template")
         }
-        if let fallbackData {
-            let template = try CPBitmapTemplate.parse(fallbackData)
-            guard expectedPixelSize == nil || expectedPixelSize == CGSize(width: CGFloat(template.width), height: CGFloat(template.height)) else {
-                throw NSError(domain: "CarCanvas.PhotoCrop", code: 1,
-                              userInfo: [NSLocalizedDescriptionKey: L("CROP_CUSTOM_SIZE_UNAVAILABLE")])
-            }
-            return try template.render(image: image, order: channelOrder)
+        let template = try CPBitmapTemplate.parse(fallbackData)
+        guard expectedPixelSize == CGSize(width: CGFloat(template.width), height: CGFloat(template.height)) else {
+            throw NSError(domain: "CarCanvas.PhotoCrop", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: L("CROP_CUSTOM_SIZE_UNAVAILABLE")])
         }
-        if let fallbackTemplate { return try fallbackTemplate.render(image: image, order: channelOrder) }
-        return try loadTemplate(for: target).render(image: image, order: channelOrder)
-    }
-
-    private func sanitized(_ raw: String) -> String {
-        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
-        return String(raw.unicodeScalars.filter { allowed.contains($0) })
+        return try template.render(image: image, order: channelOrder)
     }
 }

@@ -362,43 +362,7 @@ private struct CacheTargetRow: View {
     }
 }
 
-/// Shared by the read-only list and the single-group replacement picker.
-struct WallpaperGroupRow: View {
-    let group: WallpaperGroup
-    let thumbnails: [String: CGImage]
-    var showsTitle = true
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if showsTitle { Text(group.displayName).font(.headline) }
-            HStack(alignment: .top, spacing: 12) {
-                ForEach(group.targets) { target in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(target.isDark ? L("WALLPAPER_PREVIEW_DARK") : L("WALLPAPER_PREVIEW_LIGHT"))
-                            .font(.caption).foregroundStyle(.secondary)
-                        Group {
-                            if let image = thumbnails[target.path] {
-                                Image(decorative: image, scale: 1).resizable().scaledToFit()
-                            } else {
-                                VStack(spacing: 4) {
-                                    Image(systemName: "photo.badge.exclamationmark")
-                                    Text(L("BROWSER_PREVIEW_FAILED")).font(.caption2)
-                                }.foregroundStyle(.secondary)
-                            }
-                        }
-                        .frame(maxWidth: .infinity).frame(height: 80)
-                        .background(Color(uiColor: .tertiarySystemFill), in: RoundedRectangle(cornerRadius: 8))
-                        Text(target.fileName).font(.caption2.monospaced()).lineLimit(3)
-                        Text(ByteCountFormatter.string(fromByteCount: Int64(target.byteCount), countStyle: .file))
-                            .font(.caption2).foregroundStyle(.secondary)
-                    }.frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-        }
-    }
-}
-
-/// One session cache for the browser and destination picker. Failed preview /
+/// One session cache for the browser. Failed preview /
 /// discovery results are cached too; only refresh/mutation retries them. Original
 /// file bytes and full-size images never live in this store.
 @MainActor
@@ -412,7 +376,6 @@ final class CarPlayBrowserStore: ObservableObject {
     @Published private(set) var deviceError: String?
     @Published var error: String?
     @Published private(set) var isLoading = false
-    var groups: [WallpaperGroup] { WallpaperGroup.make(from: targets) }
 
     private var hasLoadedOnce = false
     private var loadTask: Task<Void, Never>?

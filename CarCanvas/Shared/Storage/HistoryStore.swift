@@ -1,6 +1,8 @@
 import Foundation
 import Combine
 
+/// Original-cache backups only. Legacy Documents/Exports and history.json
+/// stay on disk untouched; this store no longer reads or writes those files.
 final class HistoryStore: ObservableObject {
     static let shared = HistoryStore()
 
@@ -17,17 +19,13 @@ final class HistoryStore: ObservableObject {
         var id: String { cacheFileName }
     }
 
-    @Published private(set) var entries: [HistoryEntry] = []
     @Published private(set) var originalBackups: [OriginalBackup] = []
     @Published private(set) var backupFailures: [String] = []
 
-    let exportsDirectory: URL
     let backupsDirectory: URL
-    private let indexURL: URL
     private let backupIndexURL: URL
     private let storageQueue = DispatchQueue(label: "CarCanvas.HistoryStore", qos: .utility)
     // Disk state is owned by storageQueue; only snapshots are published on main.
-    private var storedEntries: [HistoryEntry] = []
     private var storedBackups: [OriginalBackup] = []
     private var failedBackups: Set<String> = []
     private var backupIndexReadable = true
@@ -35,23 +33,14 @@ final class HistoryStore: ObservableObject {
 
     private init() {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        exportsDirectory = docs.appendingPathComponent("Exports", isDirectory: true)
         backupsDirectory = docs.appendingPathComponent("Backups", isDirectory: true)
-        indexURL = docs.appendingPathComponent("history.json")
         backupIndexURL = backupsDirectory.appendingPathComponent("originals.json")
         storageQueue.async { self.load() }
     }
 
     private func load() {
         do {
-            try FileManager.default.createDirectory(at: exportsDirectory, withIntermediateDirectories: true)
             try FileManager.default.createDirectory(at: backupsDirectory, withIntermediateDirectories: true)
-            if FileManager.default.fileExists(atPath: indexURL.path) {
-                storedEntries = try JSONDecoder().decode([HistoryEntry].self, from: Data(contentsOf: indexURL))
-                    .sorted { $0.createdAt > $1.createdAt }
-            }
-        } catch { CCLog.error("history load failed: \(error.localizedDescription)") }
-        do {
             if FileManager.default.fileExists(atPath: backupIndexURL.path) {
                 storedBackups = try JSONDecoder().decode([OriginalBackup].self,
                                                         from: Data(contentsOf: backupIndexURL))
@@ -71,13 +60,7 @@ final class HistoryStore: ObservableObject {
             backupIndexReadable = false
             CCLog.error("original backup index load failed: \(error.localizedDescription)")
         }
-        publishEntries()
         publishBackups()
-    }
-
-    private func publishEntries() {
-        let snapshot = storedEntries
-        DispatchQueue.main.async { self.entries = snapshot }
     }
 
     private func publishBackups() {
@@ -87,56 +70,6 @@ final class HistoryStore: ObservableObject {
             self.originalBackups = snapshot
             self.backupFailures = failures
         }
-    }
-
-    private func persist() {
-        do {
-            try JSONEncoder().encode(storedEntries).write(to: indexURL, options: .atomic)
-        } catch { CCLog.error("history index save failed: \(error.localizedDescription)") }
-        publishEntries()
-    }
-
-    func add(_ entry: HistoryEntry) {
-        storageQueue.async {
-            self.storedEntries.insert(entry, at: 0)
-            self.persist()
-        }
-    }
-
-    func remove(_ id: UUID) {
-        storageQueue.async {
-            self.storedEntries.removeAll { $0.id == id }
-            self.persist()
-        }
-    }
-
-    func clearAll() {
-        storageQueue.async {
-            self.storedEntries.removeAll()
-            self.persist()
-        }
-    }
-
-    func url(for fileName: String) -> URL {
-        exportsDirectory.appendingPathComponent(fileName)
-    }
-
-    /// True when an export with this base name already exists on disk.
-    func exists(baseName: String) -> Bool {
-        for suffix in ["Dark", "Light"] {
-            if FileManager.default.fileExists(atPath: url(for: "\(baseName)-\(suffix).cpbitmap").path) {
-                return true
-            }
-        }
-        return false
-    }
-
-    /// Appends " 2", " 3", ... until the name is free, the way Finder does.
-    func uniqueBaseName(from baseName: String) -> String {
-        guard exists(baseName: baseName) else { return baseName }
-        var index = 2
-        while exists(baseName: "\(baseName) \(index)") { index += 1 }
-        return "\(baseName) \(index)"
     }
 
     /// Called inside the resolver's existing authorization, never acquiring another scope.
@@ -382,65 +315,4 @@ final class HistoryStore: ObservableObject {
                               source: source, sourceFileName: sourceFileName)
     }
 
-    /// Commit both independently encoded appearances as one entry. Reserve the
-    /// name and persist the index on the same queue; a failed pair leaves no row
-    /// or half-created export behind. Existing single-image entries stay readable.
-    @discardableResult
-    func savePair(darkData: Data, lightData: Data, baseName: String,
-                  sourceImageName: String?) throws -> HistoryEntry {
-        try storageQueue.sync {
-            let uniqueName = uniqueBaseName(from: baseName)
-            let darkName = "\(uniqueName)-Dark.cpbitmap"
-            let lightName = "\(uniqueName)-Light.cpbitmap"
-            let darkURL = url(for: darkName), lightURL = url(for: lightName)
-            let entry = HistoryEntry(baseName: uniqueName, source: .local,
-                                     darkFileName: darkName, lightFileName: lightName,
-                                     sourceImageName: sourceImageName)
-            do {
-                guard !darkData.isEmpty, !lightData.isEmpty else { throw CCError.renderFailed }
-                try darkData.write(to: darkURL, options: .atomic)
-                try lightData.write(to: lightURL, options: .atomic)
-                guard try Data(contentsOf: darkURL) == darkData,
-                      try Data(contentsOf: lightURL) == lightData else { throw CCError.verificationFailed }
-                let updated = [entry] + storedEntries
-                try JSONEncoder().encode(updated).write(to: indexURL, options: .atomic)
-                storedEntries = updated
-                publishEntries()
-                return entry
-            } catch {
-                try? FileManager.default.removeItem(at: darkURL)
-                try? FileManager.default.removeItem(at: lightURL)
-                throw error
-            }
-        }
-    }
-
-    /// Writes an exported CPBitmap and records it on the disk queue.
-    @discardableResult
-    func save(data: Data, baseName: String, appearance: WallpaperTarget.Appearance,
-              source: HistoryEntry.Source, sourceImageName: String? = nil) throws -> HistoryEntry {
-        try storageQueue.sync {
-            let suffix = appearance == .dark ? "Dark" : "Light"
-            let fileName = "\(baseName)-\(suffix).cpbitmap"
-            try data.write(to: url(for: fileName), options: .atomic)
-
-            if let existing = storedEntries.first(where: { $0.baseName == baseName && $0.source == source }) {
-                var updated = existing
-                if appearance == .dark { updated.darkFileName = fileName } else { updated.lightFileName = fileName }
-                updated.sourceImageName = sourceImageName
-                storedEntries.removeAll { $0.id == existing.id }
-                storedEntries.insert(updated, at: 0)
-                persist()
-                return updated
-            }
-            let entry = HistoryEntry(baseName: baseName,
-                                     source: source,
-                                     darkFileName: appearance == .dark ? fileName : nil,
-                                     lightFileName: appearance == .light ? fileName : nil,
-                                     sourceImageName: sourceImageName)
-            storedEntries.insert(entry, at: 0)
-            persist()
-            return entry
-        }
-    }
 }
