@@ -69,14 +69,6 @@
 "CROP_TITLE" = "壁紙をトリミング";
 "CROP_HINT" = "写真をドラッグして残す範囲を選びます。確定しても変更は一時保存されるだけです。";
 "CROP_USE_PHOTO" = "この写真を使う";
-"VEHICLE_MENU" = "車載機";
-"VEHICLE_UNNAMED" = "名前のない車載機 %ld";
-"VEHICLE_RECORDS_UNAVAILABLE" = "車載機の記録を読み取れません。今回は車載機で絞り込まず、すべてのキャッシュを表示します。";
-"VEHICLE_RECORDS_EMPTY" = "保存された車載機の記録がありません。CarPlay に接続して再試行してください。";
-"VEHICLE_NO_CACHE_MATCH" = "選択した車載機のキャッシュを確認できません。他のキャッシュは含めません。";
-"VEHICLE_SHARED_CACHE" = "この車載機は他の車載機と同じキャッシュを参照しています。独立したキャッシュとして変更できません。";
-"VEHICLE_CACHE_SCOPE_HINT" = "選択した車載機の記録から直接参照され、共有されていないキャッシュのみ表示します。未確認のキャッシュは混在させません。";
-"VEHICLE_UNKNOWN_OWNER" = "車載機で絞り込みません：キャッシュの帰属を確認できません。ご自身で確認できた壁紙のみ変更してください。";
 "CROP_WIDTH" = "幅（ピクセル）";
 "CROP_HEIGHT" = "高さ（ピクセル）";
 "CROP_SIZE_HINT" = "より快適に使用するため、車の CarPlay 表示領域のサイズをピクセル単位で入力してください。";
@@ -125,6 +117,8 @@
 "SETTINGS_LOG_EMPTY" = "ログはまだありません。";
 "SETTINGS_LOG_FOOTER" = "App 起動から終了まで記録し、終了時に自動でクリアします。書き出しは手動です。";
 "ROOT_CARPLAY" = "CarPlay";
+"ROOT_CARPLAY_WALLPAPER" = "CarPlay 壁紙";
+"ROOT_CARPLAY_WALLPAPER_SUBTITLE" = "CarPlayWallpaper の画像キャッシュを表示";
 "HISTORY_APPLY" = "適用";
 "SETTINGS_LOG_COPY" = "コピー";
 "SETTINGS_LOG_COPIED" = "コピーしました";

@@ -69,14 +69,6 @@
 "CROP_TITLE" = "Crop Wallpaper";
 "CROP_HINT" = "Drag the photo to choose which part to keep. Confirming only stages the change.";
 "CROP_USE_PHOTO" = "Use Photo";
-"VEHICLE_MENU" = "Vehicle";
-"VEHICLE_UNNAMED" = "Unnamed vehicle %ld";
-"VEHICLE_RECORDS_UNAVAILABLE" = "Vehicle records could not be read. Caches are shown unfiltered this time.";
-"VEHICLE_RECORDS_EMPTY" = "No saved vehicle records. Connect CarPlay and try again.";
-"VEHICLE_NO_CACHE_MATCH" = "The cache for this vehicle could not be confirmed. Other caches are not included.";
-"VEHICLE_SHARED_CACHE" = "This vehicle references the same cache as another vehicle. It cannot be edited as an independent cache.";
-"VEHICLE_CACHE_SCOPE_HINT" = "Only direct, non-shared cache references from the selected vehicle record are shown. Unconfirmed caches are not mixed in.";
-"VEHICLE_UNKNOWN_OWNER" = "Not filtered by vehicle: cache ownership is unknown. Only edit wallpapers you can identify yourself.";
 "CROP_WIDTH" = "Width (pixels)";
 "CROP_HEIGHT" = "Height (pixels)";
 "CROP_SIZE_HINT" = "For a better experience, enter the size of your vehicle's CarPlay display area in pixels.";
@@ -125,6 +117,8 @@
 "SETTINGS_LOG_EMPTY" = "No log entries yet.";
 "SETTINGS_LOG_FOOTER" = "Recorded from app launch until it exits; cleared automatically at exit. Export is opt-in.";
 "ROOT_CARPLAY" = "CarPlay";
+"ROOT_CARPLAY_WALLPAPER" = "CarPlay Wallpaper";
+"ROOT_CARPLAY_WALLPAPER_SUBTITLE" = "Browse the CarPlayWallpaper image cache";
 "HISTORY_APPLY" = "Apply";
 "SETTINGS_LOG_COPY" = "Copy";
 "SETTINGS_LOG_COPIED" = "Copied";

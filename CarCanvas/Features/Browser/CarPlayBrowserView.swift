@@ -20,92 +20,30 @@ struct CarPlayBrowserView: View {
     @State private var showRestoreAllConfirm = false
     @State private var isRespringing = false
     @State private var error: String?
-    @State private var selectedDeviceID: String?
 
-    private var selectedDevice: CarPlayDeviceProbe.Device? {
-        store.devices.first(where: { $0.id == selectedDeviceID }) ?? store.devices.first
-    }
+    private var currentPending: [CacheEditStore.PendingEdit] { edits.pending }
 
-    /// Vehicle records can fail to load while the cache scan succeeds: the
-    /// preference file is not a container path, so no extension is issued for
-    /// it. Filtering by an empty device list would then hide every cache the
-    /// scan just found, so an unknown owner shows all of them instead.
-    private var currentFileNames: Set<String> {
-        guard let selectedDevice else {
-            return Set(store.targets.map(\.fileName)).union(edits.pending.map { $0.target.fileName })
-        }
-        let otherNames = Set(store.devices.filter { $0.id != selectedDevice.id }.flatMap { $0.cacheFileNames })
-        return selectedDevice.cacheFileNames.subtracting(otherNames)
-    }
+    private var currentBackups: [HistoryStore.OriginalBackup] { history.originalBackups }
 
-    private var hasSharedCache: Bool {
-        guard let selectedDevice else { return false }
-        return currentFileNames.count != selectedDevice.cacheFileNames.count
-    }
-
-    private var currentPending: [CacheEditStore.PendingEdit] {
-        edits.pending.filter { currentFileNames.contains($0.target.fileName) }
-    }
-
-    private var currentBackups: [HistoryStore.OriginalBackup] {
-        history.originalBackups.filter { currentFileNames.contains($0.cacheFileName) }
-    }
-
-    private var currentBackupFailures: [String] {
-        history.backupFailures.filter { currentFileNames.contains($0) }
-    }
+    private var currentBackupFailures: [String] { history.backupFailures }
 
     // Include a staged restore whose exact backed-up filename is absent.
     private var displayedTargets: [WallpaperTarget] {
         var targets = store.targets
         let known = Set(targets.map(\.path))
         for edit in edits.pending where !known.contains(edit.target.path) { targets.append(edit.target) }
-        return targets.filter { currentFileNames.contains($0.fileName) }.sorted { $0.path < $1.path }
+        return targets.sorted { $0.path < $1.path }
     }
 
     var body: some View {
         List {
             Section { StatusBanner() }
             Section {
-                HStack(alignment: .center, spacing: 12) {
-                    Menu {
-                        Picker(L("VEHICLE_MENU"), selection: Binding(
-                            get: { selectedDevice?.id ?? "" }, set: { selectedDeviceID = $0 })) {
-                            ForEach(store.devices) { device in
-                                Text(device.name).tag(device.id)
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(selectedDevice?.name ?? L("VEHICLE_MENU")).lineLimit(1)
-                            Image(systemName: "chevron.down").font(.caption)
-                        }.font(.body).frame(height: 28)
-                    }
-                    .disabled(store.devices.count <= 1 || edits.isWorking || store.isLoading || isPreparingCrop
-                              || showPhotoPicker || preparedCrop != nil || cropSelection != nil)
-                    Spacer(minLength: 8)
-                    Button { Task { await store.load(forceRefresh: true) } } label: {
-                        Text(L("BROWSER_RETRY")).font(.body).frame(height: 28)
-                    }
-                    .disabled(edits.isWorking || store.isLoading || !edits.isReady || isPreparingCrop
-                              || showPhotoPicker || preparedCrop != nil || cropSelection != nil)
-                }.buttonStyle(.bordered).controlSize(.regular)
-            }
-            Section {
                 if store.isLoading || (!edits.isReady && edits.loadError == nil) { ProgressView(L("BROWSER_LOADING")) }
                 if let loadError = edits.loadError { Text(loadError).font(.caption).foregroundStyle(.red) }
                 if !store.isLoading {
-                    if let deviceError = store.deviceError {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(L("VEHICLE_RECORDS_UNAVAILABLE") + " " + deviceError)
-                            Text(L("VEHICLE_UNKNOWN_OWNER"))
-                        }.font(.caption).foregroundStyle(.red)
-                    } else if store.devices.isEmpty {
-                        Text(L("VEHICLE_RECORDS_EMPTY")).foregroundStyle(.secondary)
-                    } else if hasSharedCache {
-                        Text(L("VEHICLE_SHARED_CACHE")).font(.caption).foregroundStyle(.secondary)
-                    } else if displayedTargets.isEmpty {
-                        Text(L("VEHICLE_NO_CACHE_MATCH")).foregroundStyle(.secondary)
+                    if displayedTargets.isEmpty {
+                        Text(L("BROWSER_WALLPAPER_CACHE_EMPTY")).foregroundStyle(.secondary)
                     }
                 }
                 ForEach(displayedTargets) { target in
@@ -114,9 +52,6 @@ struct CarPlayBrowserView: View {
                                    canClear: hasPending(target) && edits.isReady && !edits.isWorking,
                                    onPick: { pick(target) }, onRestore: { restore(target) },
                                    onClear: { clear(target) })
-                }
-                if !store.isLoading && !store.targets.isEmpty && displayedTargets.count < store.targets.count {
-                    Text(L("VEHICLE_CACHE_SCOPE_HINT")).font(.caption).foregroundStyle(.secondary)
                 }
                 if edits.isWorking { ProgressView(L("COMMON_PLEASE_WAIT")) }
             } header: {
@@ -156,8 +91,14 @@ struct CarPlayBrowserView: View {
                 }.textCase(nil)
             }
         }
+        .navigationTitle(L("ROOT_CARPLAY_WALLPAPER"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(L("BROWSER_RETRY")) { Task { await store.load(forceRefresh: true) } }
+                    .disabled(edits.isWorking || store.isLoading || !edits.isReady || isPreparingCrop
+                              || showPhotoPicker || preparedCrop != nil || cropSelection != nil)
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 if !currentPending.isEmpty {
                     Button { apply() } label: {
@@ -252,14 +193,14 @@ struct CarPlayBrowserView: View {
     }
 
     private func canPick(_ target: WallpaperTarget) -> Bool {
-        currentFileNames.contains(target.fileName) && edits.isReady && !edits.isWorking && !store.isLoading && !isPreparingCrop
+        edits.isReady && !edits.isWorking && !store.isLoading && !isPreparingCrop
             && !showPhotoPicker && preparedCrop == nil && cropSelection == nil
             && store.targets.contains(where: { $0.path == target.path })
             && !history.backupFailures.contains(target.fileName)
     }
 
     private func canRestore(_ target: WallpaperTarget) -> Bool {
-        currentFileNames.contains(target.fileName) && edits.isReady && !edits.isWorking && !store.isLoading && !hasPending(target)
+        edits.isReady && !edits.isWorking && !store.isLoading && !hasPending(target)
             && edits.appliedTargets.contains(where: { $0.path == target.path })
             && history.originalBackups.contains(where: { $0.cacheFileName == target.fileName })
             && !history.backupFailures.contains(target.fileName)
@@ -380,8 +321,6 @@ final class CarPlayBrowserStore: ObservableObject {
     @Published private(set) var thumbnails: [String: CGImage] = [:]
     @Published private(set) var pixelSizes: [String: CGSize] = [:]
     @Published private(set) var cacheDirectory: String?
-    @Published private(set) var devices: [CarPlayDeviceProbe.Device] = []
-    @Published private(set) var deviceError: String?
     @Published var error: String?
     @Published private(set) var isLoading = false
 
@@ -416,7 +355,7 @@ final class CarPlayBrowserStore: ObservableObject {
         thumbnails = [:]
         pixelSizes = [:]
         error = nil
-        if !keepTargets { targets = []; cacheDirectory = nil; devices = []; deviceError = nil }
+        if !keepTargets { targets = []; cacheDirectory = nil }
     }
 
     func load(forceRefresh: Bool = false) async {
@@ -447,21 +386,6 @@ final class CarPlayBrowserStore: ObservableObject {
         isLoading = true
         error = nil
         let task = Task { @MainActor in
-            do {
-                let paired = try await Task.detached(priority: .userInitiated) {
-                    try CarPlayDeviceProbe.devices()
-                }.value
-                if currentRevision == revision { devices = paired; deviceError = nil }
-            } catch {
-                let diagnostic = error.localizedDescription
-                // The refused routes leave one question open: whether the one
-                // container we can read records the vehicle mapping itself.
-                // The log-only probe answers it on the next device run.
-                await Task.detached(priority: .utility) {
-                    CarPlayDeviceProbe.diagnoseContainerContents()
-                }.value
-                if currentRevision == revision { devices = []; deviceError = diagnostic }
-            }
             do {
                 let snapshot = try await Task.detached(priority: .userInitiated) {
                     let resolved = try ContainerResolver().resolve(forceRefresh: forceRefresh)

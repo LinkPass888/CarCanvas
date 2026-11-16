@@ -61,28 +61,6 @@ final class WQAccess {
         return group
     }
 
-    /// Scoped read of the single allowed CarPlay preference file.
-    func withCarPlayPreferences<T>(_ body: (Data) throws -> T) throws -> T {
-        accessLock.lock(); defer { accessLock.unlock() }
-        let group = try requireAppGroup()
-        let path = WQWhitelist.carPlayPreferencesPath
-        guard WQWhitelist.isAllowedCarPlayPreferences(path) else {
-            throw CCError.outsideWhitelist(path)
-        }
-        let handle = try acquire(path: path, group: group)
-        Thread.current.threadDictionary[WQAccess.extensionScopeKey] = true
-        defer {
-            worse_query_release(handle)
-            Thread.current.threadDictionary.removeObject(forKey: WQAccess.extensionScopeKey)
-        }
-
-        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)) else {
-            CCLog.error("prefs file unreadable after token")
-            throw CCError.templateUnreadable("com.apple.carplay.plist")
-        }
-        return try body(data)
-    }
-
     /// Identifier-only discovery. Callers supply paths from ContainerManager,
     /// LaunchServices or fsgetpath, never an editable UI path. A denied pre-stat
     /// may need a token, but no identity file is read after grant until lstat
