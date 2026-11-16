@@ -59,10 +59,12 @@ struct CarPlayBrowserView: View {
                 }
                 ForEach(history.originalBackups) { backup in
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(backup.cacheFileName).font(.headline)
-                        Text(backup.createdAt.formatted()).font(.caption).foregroundStyle(.secondary)
-                        Text(ByteCountFormatter.string(fromByteCount: Int64(backup.byteCount), countStyle: .file))
-                            .font(.caption).foregroundStyle(.secondary)
+                        Text(backup.cacheFileName).font(.caption2.monospaced())
+                        HStack {
+                            Text(backup.createdAt.formatted())
+                            Spacer()
+                            Text(ByteCountFormatter.string(fromByteCount: Int64(backup.byteCount), countStyle: .file))
+                        }.font(.caption).foregroundStyle(.secondary)
                         Text(backupSourceLabel(backup)).font(.caption).foregroundStyle(.secondary)
                     }
                 }
