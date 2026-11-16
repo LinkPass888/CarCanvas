@@ -325,10 +325,10 @@ final class CacheEditStore: ObservableObject {
     }
 
     @MainActor
-    func applyPending() async throws {
+    func applyPending(for paths: Set<String>? = nil) async throws {
         try beginWork()
         defer { isWorking = false }
-        let edits = pending
+        let edits = pending.filter { paths?.contains($0.target.path) ?? true }
         guard !edits.isEmpty else { throw CCError.nothingSelected }
         try await Task.detached(priority: .userInitiated) {
             try CacheWriter().apply(edits: edits)

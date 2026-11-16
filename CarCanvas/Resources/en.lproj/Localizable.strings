@@ -69,6 +69,13 @@
 "CROP_TITLE" = "Crop Wallpaper";
 "CROP_HINT" = "Drag the photo to choose which part to keep. Confirming only stages the change.";
 "CROP_USE_PHOTO" = "Use Photo";
+"VEHICLE_MENU" = "Vehicle";
+"VEHICLE_UNNAMED" = "Unnamed vehicle %ld";
+"VEHICLE_RECORDS_UNAVAILABLE" = "Vehicle records could not be read. Caches are not combined.";
+"VEHICLE_RECORDS_EMPTY" = "No saved vehicle records. Connect CarPlay and try again.";
+"VEHICLE_NO_CACHE_MATCH" = "The cache for this vehicle could not be confirmed. Other caches are not included.";
+"VEHICLE_SHARED_CACHE" = "This vehicle references the same cache as another vehicle. It cannot be edited as an independent cache.";
+"VEHICLE_CACHE_SCOPE_HINT" = "Only direct, non-shared cache references from the selected vehicle record are shown. Unconfirmed caches are not mixed in.";
 "CROP_WIDTH" = "Width (pixels)";
 "CROP_HEIGHT" = "Height (pixels)";
 "CROP_SIZE_HINT" = "For a better experience, enter the size of your vehicle's CarPlay display area in pixels.";
@@ -228,5 +235,5 @@
 "CACHE_EDIT_APPLIED" = "Replacement applied";
 "CACHE_APPLY_COUNT" = "Apply %ld pending files";
 "CACHE_APPLY_FAILED" = "%ld file(s) committed. %@ No automatic logout was requested. Failed and remaining edits stay pending.";
-"CACHE_RESTORE_ALL_TITLE" = "Stage all original backups?";
-"CACHE_RESTORE_ALL_MESSAGE" = "Stage every valid saved original for its exact filename. This replaces pending photos or restores for those filenames only. Nothing is written or logged out yet; tap Apply to finish or Clear to cancel.";
+"CACHE_RESTORE_ALL_TITLE" = "Stage this vehicle’s original backups?";
+"CACHE_RESTORE_ALL_MESSAGE" = "Stage the valid saved originals shown for the selected vehicle, replacing pending edits for those filenames only. Nothing is written or logged out yet; tap Apply to finish or Clear to cancel.";

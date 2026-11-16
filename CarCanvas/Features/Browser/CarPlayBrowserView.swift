@@ -20,23 +20,85 @@ struct CarPlayBrowserView: View {
     @State private var showRestoreAllConfirm = false
     @State private var isRespringing = false
     @State private var error: String?
+    @State private var selectedDeviceID: String?
+
+    private var selectedDevice: CarPlayDeviceProbe.Device? {
+        store.devices.first(where: { $0.id == selectedDeviceID }) ?? store.devices.first
+    }
+
+    private var currentFileNames: Set<String> {
+        guard let selectedDevice else { return [] }
+        let otherNames = Set(store.devices.filter { $0.id != selectedDevice.id }.flatMap { $0.cacheFileNames })
+        return selectedDevice.cacheFileNames.subtracting(otherNames)
+    }
+
+    private var hasSharedCache: Bool {
+        guard let selectedDevice else { return false }
+        return currentFileNames.count != selectedDevice.cacheFileNames.count
+    }
+
+    private var currentPending: [CacheEditStore.PendingEdit] {
+        edits.pending.filter { currentFileNames.contains($0.target.fileName) }
+    }
+
+    private var currentBackups: [HistoryStore.OriginalBackup] {
+        history.originalBackups.filter { currentFileNames.contains($0.cacheFileName) }
+    }
+
+    private var currentBackupFailures: [String] {
+        history.backupFailures.filter { currentFileNames.contains($0) }
+    }
 
     // Include a staged restore whose exact backed-up filename is absent.
     private var displayedTargets: [WallpaperTarget] {
         var targets = store.targets
         let known = Set(targets.map(\.path))
         for edit in edits.pending where !known.contains(edit.target.path) { targets.append(edit.target) }
-        return targets.sorted { $0.path < $1.path }
+        return targets.filter { currentFileNames.contains($0.fileName) }.sorted { $0.path < $1.path }
     }
 
     var body: some View {
         List {
             Section { StatusBanner() }
             Section {
+                HStack(alignment: .center, spacing: 12) {
+                    Menu {
+                        Picker(L("VEHICLE_MENU"), selection: Binding(
+                            get: { selectedDevice?.id ?? "" }, set: { selectedDeviceID = $0 })) {
+                            ForEach(store.devices) { device in
+                                Text(device.name).tag(device.id)
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(selectedDevice?.name ?? L("VEHICLE_MENU")).lineLimit(1)
+                            Image(systemName: "chevron.down").font(.caption)
+                        }.font(.body).frame(height: 28)
+                    }
+                    .disabled(store.devices.count <= 1 || edits.isWorking || store.isLoading || isPreparingCrop
+                              || showPhotoPicker || preparedCrop != nil || cropSelection != nil)
+                    Spacer(minLength: 8)
+                    Button { Task { await store.load(forceRefresh: true) } } label: {
+                        Text(L("BROWSER_RETRY")).font(.body).frame(height: 28)
+                    }
+                    .disabled(edits.isWorking || store.isLoading || !edits.isReady || isPreparingCrop
+                              || showPhotoPicker || preparedCrop != nil || cropSelection != nil)
+                }.buttonStyle(.bordered).controlSize(.regular)
+            }
+            Section {
                 if store.isLoading || (!edits.isReady && edits.loadError == nil) { ProgressView(L("BROWSER_LOADING")) }
                 if let loadError = edits.loadError { Text(loadError).font(.caption).foregroundStyle(.red) }
-                if !store.isLoading && displayedTargets.isEmpty {
-                    Text(L("BROWSER_WALLPAPER_CACHE_EMPTY")).foregroundStyle(.secondary)
+                if !store.isLoading {
+                    if let deviceError = store.deviceError {
+                        Text(L("VEHICLE_RECORDS_UNAVAILABLE") + " " + deviceError)
+                            .font(.caption).foregroundStyle(.red)
+                    } else if store.devices.isEmpty {
+                        Text(L("VEHICLE_RECORDS_EMPTY")).foregroundStyle(.secondary)
+                    } else if hasSharedCache {
+                        Text(L("VEHICLE_SHARED_CACHE")).font(.caption).foregroundStyle(.secondary)
+                    } else if displayedTargets.isEmpty {
+                        Text(L("VEHICLE_NO_CACHE_MATCH")).foregroundStyle(.secondary)
+                    }
                 }
                 ForEach(displayedTargets) { target in
                     CacheTargetRow(target: target, image: preview(for: target), status: status(for: target),
@@ -44,6 +106,9 @@ struct CarPlayBrowserView: View {
                                    canClear: hasPending(target) && edits.isReady && !edits.isWorking,
                                    onPick: { pick(target) }, onRestore: { restore(target) },
                                    onClear: { clear(target) })
+                }
+                if !store.isLoading && !store.targets.isEmpty && displayedTargets.count < store.targets.count {
+                    Text(L("VEHICLE_CACHE_SCOPE_HINT")).font(.caption).foregroundStyle(.secondary)
                 }
                 if edits.isWorking { ProgressView(L("COMMON_PLEASE_WAIT")) }
             } header: {
@@ -54,10 +119,10 @@ struct CarPlayBrowserView: View {
                 }
             }
             Section {
-                if history.originalBackups.isEmpty {
+                if currentBackups.isEmpty {
                     Text(L("HISTORY_BACKUP_EMPTY")).foregroundStyle(.secondary)
                 }
-                ForEach(history.originalBackups) { backup in
+                ForEach(currentBackups) { backup in
                     VStack(alignment: .leading, spacing: 6) {
                         Text(backup.cacheFileName).font(.caption2.monospaced())
                         HStack {
@@ -68,8 +133,8 @@ struct CarPlayBrowserView: View {
                         Text(backupSourceLabel(backup)).font(.caption).foregroundStyle(.secondary)
                     }
                 }
-                if !history.backupFailures.isEmpty {
-                    Text(LF("HISTORY_BACKUP_FAILED", history.backupFailures.joined(separator: ", ")))
+                if !currentBackupFailures.isEmpty {
+                    Text(LF("HISTORY_BACKUP_FAILED", currentBackupFailures.joined(separator: ", ")))
                         .font(.caption).foregroundStyle(.red)
                 }
             } header: {
@@ -78,30 +143,27 @@ struct CarPlayBrowserView: View {
                     Spacer()
                     Button(L("WALLPAPER_RESTORE")) { showRestoreAllConfirm = true }
                         .buttonStyle(.bordered).controlSize(.small)
-                        .disabled(history.originalBackups.isEmpty || !history.backupFailures.isEmpty
+                        .disabled(currentBackups.isEmpty || !currentBackupFailures.isEmpty
                                   || edits.isWorking || !edits.isReady || store.isLoading || store.cacheDirectory == nil)
                 }.textCase(nil)
             }
         }
-        .navigationTitle(L("ROOT_CARPLAY_WALLPAPER"))
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                if edits.pending.isEmpty {
-                    Button(L("BROWSER_RETRY")) { Task { await store.load(forceRefresh: true) } }
-                        .disabled(edits.isWorking || store.isLoading || !edits.isReady || isPreparingCrop || preparedCrop != nil || cropSelection != nil)
-                } else {
+                if !currentPending.isEmpty {
                     Button { apply() } label: {
                         Text(L("HISTORY_APPLY"))
                             .padding(.trailing, 6)
                             .overlay(alignment: .topTrailing) {
-                                Text("\(edits.pending.count)").font(.caption2.monospacedDigit())
+                                Text("\(currentPending.count)").font(.caption2.monospacedDigit())
                                     .padding(.horizontal, 5).padding(.vertical, 2)
                                     .background(Color.accentColor, in: Capsule()).foregroundStyle(.white)
                                     .offset(x: 10, y: -10)
                                     .allowsHitTesting(false)
                             }
                     }
-                    .accessibilityLabel(LF("CACHE_APPLY_COUNT", edits.pending.count))
+                    .accessibilityLabel(LF("CACHE_APPLY_COUNT", currentPending.count))
                     .disabled(edits.isWorking || store.isLoading || !edits.isReady || isPreparingCrop || preparedCrop != nil || cropSelection != nil)
                 }
             }
@@ -178,14 +240,14 @@ struct CarPlayBrowserView: View {
     }
 
     private func canPick(_ target: WallpaperTarget) -> Bool {
-        edits.isReady && !edits.isWorking && !store.isLoading && !isPreparingCrop
+        currentFileNames.contains(target.fileName) && edits.isReady && !edits.isWorking && !store.isLoading && !isPreparingCrop
             && !showPhotoPicker && preparedCrop == nil && cropSelection == nil
             && store.targets.contains(where: { $0.path == target.path })
             && !history.backupFailures.contains(target.fileName)
     }
 
     private func canRestore(_ target: WallpaperTarget) -> Bool {
-        edits.isReady && !edits.isWorking && !store.isLoading && !hasPending(target)
+        currentFileNames.contains(target.fileName) && edits.isReady && !edits.isWorking && !store.isLoading && !hasPending(target)
             && edits.appliedTargets.contains(where: { $0.path == target.path })
             && history.originalBackups.contains(where: { $0.cacheFileName == target.fileName })
             && !history.backupFailures.contains(target.fileName)
@@ -208,7 +270,7 @@ struct CarPlayBrowserView: View {
     }
 
     private func restoreAll() {
-        let backups = history.originalBackups, order = settings.channelOrder
+        let backups = currentBackups, order = settings.channelOrder
         Task {
             do { try await edits.stageRestores(backups, channelOrder: order) }
             catch { self.error = error.localizedDescription }
@@ -225,7 +287,7 @@ struct CarPlayBrowserView: View {
     private func apply() {
         Task {
             do {
-                try await edits.applyPending()
+                try await edits.applyPending(for: Set(currentPending.map { $0.target.path }))
                 // Every successful file and its status are on disk already.
                 isRespringing = true
             } catch { self.error = error.localizedDescription }
@@ -338,6 +400,8 @@ final class CarPlayBrowserStore: ObservableObject {
     @Published private(set) var targets: [WallpaperTarget] = []
     @Published private(set) var thumbnails: [String: CGImage] = [:]
     @Published private(set) var cacheDirectory: String?
+    @Published private(set) var devices: [CarPlayDeviceProbe.Device] = []
+    @Published private(set) var deviceError: String?
     @Published var error: String?
     @Published private(set) var isLoading = false
     var groups: [WallpaperGroup] { WallpaperGroup.make(from: targets) }
@@ -372,7 +436,7 @@ final class CarPlayBrowserStore: ObservableObject {
         hasLoadedOnce = false
         thumbnails = [:]
         error = nil
-        if !keepTargets { targets = []; cacheDirectory = nil }
+        if !keepTargets { targets = []; cacheDirectory = nil; devices = []; deviceError = nil }
     }
 
     func load(forceRefresh: Bool = false) async {
@@ -402,6 +466,14 @@ final class CarPlayBrowserStore: ObservableObject {
         isLoading = true
         error = nil
         let task = Task { @MainActor in
+            do {
+                let paired = try await Task.detached(priority: .userInitiated) {
+                    try CarPlayDeviceProbe.devices()
+                }.value
+                if currentRevision == revision { devices = paired; deviceError = nil }
+            } catch {
+                if currentRevision == revision { devices = []; deviceError = error.localizedDescription }
+            }
             do {
                 let snapshot = try await Task.detached(priority: .userInitiated) {
                     let resolved = try ContainerResolver().resolve(forceRefresh: forceRefresh)
