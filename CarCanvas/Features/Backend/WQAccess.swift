@@ -203,7 +203,8 @@ final class WQAccess {
             throw NSError(domain: NSPOSIXErrorDomain, code: Int(code),
                           userInfo: [NSLocalizedDescriptionKey: "Token issued, but target open failed (errno \(code)): \(String(cString: strerror(code)))"])
         }
-        CCLog.error("both flag sets returned no usable handle for \(path): \(lastHandle)")
+        CCLog.error("both flag sets returned no usable handle for \(path): \(lastHandle)"
+                    + " | \(describePathFailure(path, directory: directory))")
         throw CCError.accessFailed(lastHandle)
     }
 
@@ -213,6 +214,30 @@ final class WQAccess {
         guard fd >= 0 else { return errno }
         close(fd)
         return nil
+    }
+
+    /// A negative handle alone cannot say why the query failed: worse_query
+    /// collapses a rejected query, a refused extension and a refused consume
+    /// into the same code. Report what the path itself looks like, so the log
+    /// separates "no such file" from "exists but denied" from "fine without a
+    /// token". Runs only on the failure path; success pays nothing.
+    private func describePathFailure(_ path: String, directory: Bool) -> String {
+        var info = stat()
+        guard lstat(path, &info) == 0 else {
+            let code = errno
+            return "lstat errno \(code) (\(String(cString: strerror(code))))"
+        }
+        let kind: String
+        switch info.st_mode & UInt16(S_IFMT) {
+        case UInt16(S_IFDIR): kind = "directory"
+        case UInt16(S_IFREG): kind = "file (\(info.st_size) bytes)"
+        case UInt16(S_IFLNK): kind = "symlink"
+        default:             kind = "mode \(info.st_mode & UInt16(S_IFMT))"
+        }
+        if let code = tokenOpenError(path, directory: directory) {
+            return "\(kind), open errno \(code) (\(String(cString: strerror(code))))"
+        }
+        return "\(kind), opens without a token"
     }
 
     private func consume(containerPath: String) throws -> Int64 {
