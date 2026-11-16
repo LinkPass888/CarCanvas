@@ -29,8 +29,7 @@ struct CarCanvasApp: App {
             case .inactive:
                 CCLog.event("scene inactive")
             case .background:
-                CCLog.event("scene background -> clearing session log")
-                CCLog.clear()
+                CCLog.event("scene background")
             @unknown default:
                 break
             }

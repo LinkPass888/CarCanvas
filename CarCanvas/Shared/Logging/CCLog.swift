@@ -5,8 +5,8 @@ import UIKit
 /// In-memory session log for on-device troubleshooting.
 ///
 /// Lifecycle: a session-start line is written when the app launches, and the
-/// buffer is cleared when the app exits (or is backgrounded/terminated), so a
-/// fresh launch always starts from an empty log. Export is opt-in from Settings.
+/// buffer is cleared when the app exits, so a fresh launch always starts from an
+/// empty log. It survives backgrounding so it can still be copied out.
 enum CCLog {
     private static let subsystem = Bundle.main.bundleIdentifier ?? "com.carcanvas.wq"
     private static let logger = Logger(subsystem: subsystem, category: "CarCanvas")
@@ -34,11 +34,6 @@ enum CCLog {
         appendLocked("session start | iOS \(WQCompatibility.versionString) | \(WQCompatibility.supportSummary)")
         appendLocked("bundle=\(Bundle.main.bundleIdentifier ?? "-") version=\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "-")")
 
-        NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification,
-                                               object: nil, queue: .main) { _ in
-            CCLog.event("app did enter background -> clearing session log")
-            CCLog.clear()
-        }
         NotificationCenter.default.addObserver(forName: UIApplication.willTerminateNotification,
                                                object: nil, queue: .main) { _ in
             CCLog.event("app will terminate -> clearing session log")
