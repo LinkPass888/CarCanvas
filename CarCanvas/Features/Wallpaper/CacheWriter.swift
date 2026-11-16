@@ -31,12 +31,12 @@ final class CacheWriter {
                 try autoreleasepool {
                     let path = resolved.cacheDirectory + "/" + backup.cacheFileName
                     guard WQWhitelist.isAllowedCacheFile(path, in: resolved.cacheDirectory) else { throw CCError.outsideWhitelist(path) }
-                    _ = try history.backupData(for: backup)
+                    let pixelSize = CPBitmapTemplate.pixelSize(try history.backupData(for: backup))
                     let target = files.first(where: { $0.path == path })
                         ?? WallpaperTarget(path: path, fileName: backup.cacheFileName,
                                            appearance: WQWhitelist.appearance(of: backup.cacheFileName), byteCount: 0)
                     let image = service.previewImage(at: history.backupsDirectory.appendingPathComponent(backup.backupFileName))
-                    return CacheEditStore.PreparedRestore(target: target, backup: backup, thumbnail: image)
+                    return CacheEditStore.PreparedRestore(target: target, backup: backup, thumbnail: image, pixelSize: pixelSize)
                 }
             }
         }

@@ -85,6 +85,22 @@ struct CPBitmapTemplate {
         }
     }
 
+    /// Read only the real file's trailer, never the preview thumbnail geometry.
+    static func pixelSize(at url: URL, expectedByteCount: Int? = nil) -> CGSize? {
+        do {
+            let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
+            guard values.isRegularFile == true, values.isSymbolicLink != true,
+                  let size = values.fileSize, size >= 28, size <= 256 * 1024 * 1024,
+                  expectedByteCount == nil || expectedByteCount == size else { return nil }
+            let file = try FileHandle(forReadingFrom: url)
+            defer { try? file.close() }
+            guard try file.seekToEnd() == UInt64(size) else { return nil }
+            try file.seek(toOffset: UInt64(size - 28))
+            guard let trailer = try file.read(upToCount: 28), trailer.count == 28 else { return nil }
+            return pixelSize(trailer)
+        } catch { return nil }
+    }
+
     /// The crop center uses the photo's top-left coordinate system.
     static func aspectFillRect(imageSize: CGSize, targetSize: CGSize, center: CGPoint) -> CGRect {
         let scale = max(targetSize.width / imageSize.width, targetSize.height / imageSize.height)

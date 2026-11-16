@@ -28,6 +28,7 @@ final class CacheEditStore: ObservableObject {
         let target: WallpaperTarget
         let backup: HistoryStore.OriginalBackup
         let thumbnail: CGImage?
+        let pixelSize: CGSize?
     }
 
     struct ResetSnapshot {
@@ -43,6 +44,7 @@ final class CacheEditStore: ObservableObject {
     @Published private(set) var pending: [PendingEdit] = []
     @Published private(set) var appliedTargets: [WallpaperTarget] = []
     @Published private(set) var thumbnails: [String: CGImage] = [:]
+    @Published private(set) var pixelSizes: [String: CGSize] = [:]
     @Published private(set) var isReady = false
     @Published private(set) var isWorking = false
     @Published private(set) var loadError: String?
@@ -52,6 +54,7 @@ final class CacheEditStore: ObservableObject {
     private let storageQueue = DispatchQueue(label: "CarCanvas.CacheEditStore", qos: .utility)
     private var stored = State()
     private var storedThumbnails: [String: CGImage] = [:]
+    private var storedPixelSizes: [String: CGSize] = [:]
     private var indexReadable = false
 
     private init() {
@@ -69,6 +72,7 @@ final class CacheEditStore: ObservableObject {
                 try validate(stored)
             }
             for edit in stored.pending {
+                storedPixelSizes[edit.target.path] = pendingPixelSize(for: edit)
                 // Missing/corrupt staging files remain clearable, never silently
                 // treated as applied or replaced with another file's contents.
                 if let data = try? localData(edit.previewFileName, maximum: 4 * 1024 * 1024),
@@ -134,10 +138,12 @@ final class CacheEditStore: ObservableObject {
         let edits = stored.pending.sorted { $0.target.path < $1.target.path }
         let applied = stored.applied
         let images = storedThumbnails
+        let sizes = storedPixelSizes
         DispatchQueue.main.async {
             self.pending = edits
             self.appliedTargets = applied
             self.thumbnails = images
+            self.pixelSizes = sizes
             self.isReady = true
         }
     }
@@ -176,7 +182,8 @@ final class CacheEditStore: ObservableObject {
                 try payload.write(to: directory.appendingPathComponent(edit.payloadFileName), options: .atomic)
                 guard try localData(edit.payloadFileName) == payload else { throw CCError.verificationFailed }
                 try saveThumbnail(thumbnail, for: edit)
-                try replacePending(with: [edit], images: [target.path: thumbnail])
+                try replacePending(with: [edit], images: [target.path: thumbnail],
+                                   pixelSizes: CPBitmapTemplate.pixelSize(payload).map { [target.path: $0] } ?? [:])
             } catch {
                 removeFiles(for: edit)
                 throw error
@@ -202,14 +209,16 @@ final class CacheEditStore: ObservableObject {
                 let edits = prepared.map { PendingEdit(id: UUID(), target: $0.target,
                                                        action: .restore($0.backup), createdAt: Date()) }
                 var images: [String: CGImage] = [:]
+                var sizes: [String: CGSize] = [:]
                 do {
                     for (edit, restore) in zip(edits, prepared) {
+                        sizes[edit.target.path] = restore.pixelSize
                         if let image = restore.thumbnail {
                             try self.saveThumbnail(image, for: edit)
                             images[edit.target.path] = image
                         }
                     }
-                    try self.replacePending(with: edits, images: images)
+                    try self.replacePending(with: edits, images: images, pixelSizes: sizes)
                 } catch {
                     for edit in edits { self.removeFiles(for: edit) }
                     throw error
@@ -219,14 +228,18 @@ final class CacheEditStore: ObservableObject {
     }
 
     /// Persist the whole selection before deleting superseded local payloads.
-    private func replacePending(with edits: [PendingEdit], images: [String: CGImage]) throws {
+    private func replacePending(with edits: [PendingEdit], images: [String: CGImage],
+                                pixelSizes: [String: CGSize]) throws {
         let paths = Set(edits.map { $0.target.path })
         let previous = stored.pending.filter { paths.contains($0.target.path) }
         var updated = stored
         updated.pending.removeAll { paths.contains($0.target.path) }
         updated.pending.append(contentsOf: edits)
         try persist(updated)
-        for path in paths { storedThumbnails[path] = images[path] }
+        for path in paths {
+            storedThumbnails[path] = images[path]
+            storedPixelSizes[path] = pixelSizes[path]
+        }
         for edit in previous { removeFiles(for: edit) }
         publish()
     }
@@ -242,6 +255,7 @@ final class CacheEditStore: ObservableObject {
                 updated.pending.removeAll { $0.target.path == target.path }
                 try self.persist(updated)
                 self.storedThumbnails[target.path] = nil
+                self.storedPixelSizes[target.path] = nil
                 for edit in removed { self.removeFiles(for: edit) }
                 self.publish()
             }
@@ -280,6 +294,7 @@ final class CacheEditStore: ObservableObject {
             }
             try persist(updated)
             storedThumbnails[edit.target.path] = nil
+            storedPixelSizes[edit.target.path] = nil
             removeFiles(for: edit)
             publish()
         }
@@ -317,6 +332,7 @@ final class CacheEditStore: ObservableObject {
                 try persist(updated)
                 for edit in removed {
                     storedThumbnails[edit.target.path] = nil
+                    storedPixelSizes[edit.target.path] = nil
                     removeFiles(for: edit)
                 }
                 publish()
@@ -355,6 +371,7 @@ final class CacheEditStore: ObservableObject {
             // Keep payloads until the cache AND backup purge have committed.
             try persist(State())
             storedThumbnails = [:]
+            storedPixelSizes = [:]
             publish()
         }
     }
@@ -364,6 +381,7 @@ final class CacheEditStore: ObservableObject {
             guard stored == State() else { throw CCError.verificationFailed }
             try persist(State(pending: snapshot.pending, applied: snapshot.applied))
             for edit in snapshot.pending {
+                storedPixelSizes[edit.target.path] = pendingPixelSize(for: edit)
                 if let data = try? localData(edit.previewFileName, maximum: 4 * 1024 * 1024) {
                     storedThumbnails[edit.target.path] = WallpaperService.photoPreview(data: data)
                 }
@@ -374,6 +392,16 @@ final class CacheEditStore: ObservableObject {
 
     func finishReset(_ snapshot: ResetSnapshot) {
         storageQueue.sync { for edit in snapshot.pending { removeFiles(for: edit) } }
+    }
+
+    private func pendingPixelSize(for edit: PendingEdit) -> CGSize? {
+        switch edit.action {
+        case .replace:
+            return CPBitmapTemplate.pixelSize(at: directory.appendingPathComponent(edit.payloadFileName))
+        case .restore(let backup):
+            return CPBitmapTemplate.pixelSize(at: HistoryStore.shared.backupsDirectory.appendingPathComponent(backup.backupFileName),
+                                              expectedByteCount: backup.byteCount)
+        }
     }
 
     private func localData(_ name: String, maximum: Int = 256 * 1024 * 1024) throws -> Data {

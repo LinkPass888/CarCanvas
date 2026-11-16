@@ -145,14 +145,17 @@ final class WallpaperService {
         return image
     }
 
-    func previewImage(for target: WallpaperTarget, resolved: ContainerResolver.Resolved) -> CGImage? {
+    func previewImage(for target: WallpaperTarget, resolved: ContainerResolver.Resolved,
+                      onPixelSize: ((CGSize?) -> Void)? = nil) -> CGImage? {
         do {
             return try WQAccess.shared.withAccess(containerPath: resolved.containerPath) {
                 guard try WQWhitelist.cacheDirectoryExists(resolved.cacheDirectory),
                       try ContainerResolver.cacheFiles(in: resolved.cacheDirectory).contains(where: { $0.path == target.path && $0.byteCount > 0 && $0.byteCount <= 256 * 1024 * 1024 }) else {
                     throw CCError.templateUnreadable(target.fileName)
                 }
-                return previewImage(at: URL(fileURLWithPath: target.path))
+                let url = URL(fileURLWithPath: target.path)
+                onPixelSize?(CPBitmapTemplate.pixelSize(at: url))
+                return previewImage(at: url)
             }
         } catch {
             CCLog.error("CPBitmap preview access failed for \(target.fileName): \(error.localizedDescription)")

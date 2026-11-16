@@ -101,7 +101,7 @@ struct CarPlayBrowserView: View {
                     }
                 }
                 ForEach(displayedTargets) { target in
-                    CacheTargetRow(target: target, image: preview(for: target), status: status(for: target),
+                    CacheTargetRow(target: target, image: preview(for: target), pixelSize: pixelSize(for: target), status: status(for: target),
                                    canPick: canPick(target), canRestore: canRestore(target),
                                    canClear: hasPending(target) && edits.isReady && !edits.isWorking,
                                    onPick: { pick(target) }, onRestore: { restore(target) },
@@ -231,6 +231,10 @@ struct CarPlayBrowserView: View {
         hasPending(target) ? edits.thumbnails[target.path] : store.thumbnails[target.path]
     }
 
+    private func pixelSize(for target: WallpaperTarget) -> CGSize? {
+        hasPending(target) ? edits.pixelSizes[target.path] : store.pixelSizes[target.path]
+    }
+
     private func status(for target: WallpaperTarget) -> String? {
         if let edit = edits.pending.first(where: { $0.target.path == target.path }) {
             return edit.isRestore ? L("CACHE_EDIT_PENDING_RESTORE") : L("CACHE_EDIT_PENDING_REPLACE")
@@ -308,6 +312,7 @@ struct CarPlayBrowserView: View {
 private struct CacheTargetRow: View {
     let target: WallpaperTarget
     let image: CGImage?
+    let pixelSize: CGSize?
     let status: String?
     let canPick: Bool
     let canRestore: Bool
@@ -348,9 +353,11 @@ private struct CacheTargetRow: View {
                     Button(L("CACHE_EDIT_CLEAR"), action: onClear).disabled(!canClear)
                 }.buttonStyle(.bordered).font(.footnote)
             }
-            if let status { Text(status).font(.caption).foregroundStyle(.secondary) }
-            Text(ByteCountFormatter.string(fromByteCount: Int64(target.byteCount), countStyle: .file))
-                .font(.caption2).foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(ByteCountFormatter.string(fromByteCount: Int64(target.byteCount), countStyle: .file))
+                Text(pixelSize.map { "\(Int($0.width)) × \(Int($0.height))" } ?? "—")
+                if let status { Text(status).font(.caption) }
+            }.font(.caption2).foregroundStyle(.secondary)
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
 }
@@ -399,6 +406,7 @@ final class CarPlayBrowserStore: ObservableObject {
     static let shared = CarPlayBrowserStore()
     @Published private(set) var targets: [WallpaperTarget] = []
     @Published private(set) var thumbnails: [String: CGImage] = [:]
+    @Published private(set) var pixelSizes: [String: CGSize] = [:]
     @Published private(set) var cacheDirectory: String?
     @Published private(set) var devices: [CarPlayDeviceProbe.Device] = []
     @Published private(set) var deviceError: String?
@@ -435,6 +443,7 @@ final class CarPlayBrowserStore: ObservableObject {
         minimumGeneration = generation + 1
         hasLoadedOnce = false
         thumbnails = [:]
+        pixelSizes = [:]
         error = nil
         if !keepTargets { targets = []; cacheDirectory = nil; devices = []; deviceError = nil }
     }
@@ -456,6 +465,7 @@ final class CarPlayBrowserStore: ObservableObject {
     private struct Snapshot {
         let resolved: ContainerResolver.Resolved
         let thumbnails: [String: CGImage]
+        let pixelSizes: [String: CGSize]
     }
 
     private func startLoad(forceRefresh: Bool) -> Task<Void, Never> {
@@ -479,24 +489,27 @@ final class CarPlayBrowserStore: ObservableObject {
                     let resolved = try ContainerResolver().resolve(forceRefresh: forceRefresh)
                     let service = WallpaperService(channelOrder: channelOrder)
                     var images: [String: CGImage] = [:]
+                    var sizes: [String: CGSize] = [:]
                     // A serial loop bounds peak memory to one decoded original.
                     for target in resolved.files {
                         autoreleasepool {
-                            if let image = service.previewImage(for: target, resolved: resolved) { images[target.path] = image }
+                            if let image = service.previewImage(for: target, resolved: resolved,
+                                                                onPixelSize: { sizes[target.path] = $0 }) { images[target.path] = image }
                         }
                     }
                     try CacheEditStore.shared.reconcile(with: resolved)
-                    return Snapshot(resolved: resolved, thumbnails: images)
+                    return Snapshot(resolved: resolved, thumbnails: images, pixelSizes: sizes)
                 }.value
                 if currentRevision == revision {
                     targets = snapshot.resolved.files
                     thumbnails = snapshot.thumbnails
+                    pixelSizes = snapshot.pixelSizes
                     cacheDirectory = snapshot.resolved.cacheDirectory
                     hasLoadedOnce = true
                 }
             } catch {
                 if currentRevision == revision {
-                    targets = []; thumbnails = [:]; cacheDirectory = nil
+                    targets = []; thumbnails = [:]; pixelSizes = [:]; cacheDirectory = nil
                     self.error = error.localizedDescription
                     hasLoadedOnce = true
                 }
