@@ -71,7 +71,7 @@
 "CROP_USE_PHOTO" = "使用照片";
 "CROP_WIDTH" = "宽度（像素）";
 "CROP_HEIGHT" = "高度（像素）";
-"CROP_SIZE_HINT" = "建议输入车辆 CarPlay 窗口尺寸（像素），以获得更好的体验。";
+"CROP_SIZE_HINT" = "建议输入 CarPlay 窗口尺寸（像素），以获得更好的体验。";
 "CROP_SIZE_INVALID" = "请输入有效的像素宽高，每边不超过 16384，总像素不超过 33554432。";
 "CROP_RATIOS" = "常见比例";
 "CROP_SYSTEM_SIZE" = "系统尺寸";
@@ -148,6 +148,6 @@
 "CACHE_EDIT_APPLIED" = "替换已应用";
 "CACHE_APPLY_COUNT" = "应用 %ld 个待处理文件";
 "CACHE_APPLY_FAILED" = "已成功写入 %ld 个文件。%@ 未触发自动注销；失败和剩余修改仍待应用。";
-"CACHE_RESTORE_ALL_TITLE" = "暂存本车机原件的恢复？";
-"CACHE_RESTORE_ALL_MESSAGE" = "将当前车机列表中有效原件的恢复加入待应用列表，只替换这些文件名对应的待应用照片或恢复。此时不会写入或注销；点“应用”完成，或点“清空”撤销。";
+"CACHE_RESTORE_ALL_TITLE" = "暂存全部原件的恢复？";
+"CACHE_RESTORE_ALL_MESSAGE" = "将当前列表中有效原件的恢复加入待应用列表，只替换这些文件名对应的待应用照片或恢复。此时不会写入或注销；点“应用”完成，或点“清空”撤销。";
 "CACHE_EDIT_NOTHING_PENDING" = "没有待应用的修改。";

@@ -71,7 +71,7 @@
 "CROP_USE_PHOTO" = "Use Photo";
 "CROP_WIDTH" = "Width (pixels)";
 "CROP_HEIGHT" = "Height (pixels)";
-"CROP_SIZE_HINT" = "For a better experience, enter the size of your vehicle's CarPlay display area in pixels.";
+"CROP_SIZE_HINT" = "For a better experience, enter the size of your CarPlay display area in pixels.";
 "CROP_SIZE_INVALID" = "Enter valid pixel dimensions: up to 16384 per side and 33554432 pixels in total.";
 "CROP_RATIOS" = "Common ratios";
 "CROP_SYSTEM_SIZE" = "System size";
@@ -148,6 +148,6 @@
 "CACHE_EDIT_APPLIED" = "Replacement applied";
 "CACHE_APPLY_COUNT" = "Apply %ld pending files";
 "CACHE_APPLY_FAILED" = "%ld file(s) committed. %@ No automatic logout was requested. Failed and remaining edits stay pending.";
-"CACHE_RESTORE_ALL_TITLE" = "Stage this vehicle’s original backups?";
-"CACHE_RESTORE_ALL_MESSAGE" = "Stage the valid saved originals shown for the selected vehicle, replacing pending edits for those filenames only. Nothing is written or logged out yet; tap Apply to finish or Clear to cancel.";
+"CACHE_RESTORE_ALL_TITLE" = "Stage all original backups?";
+"CACHE_RESTORE_ALL_MESSAGE" = "Stage the valid saved originals shown in the list, replacing pending edits for those filenames only. Nothing is written or logged out yet; tap Apply to finish or Clear to cancel.";
 "CACHE_EDIT_NOTHING_PENDING" = "No pending changes to apply.";
