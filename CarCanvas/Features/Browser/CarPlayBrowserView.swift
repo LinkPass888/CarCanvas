@@ -117,9 +117,10 @@ struct CarPlayBrowserView: View {
             if !presented { Task { await Task.yield(); presentPreparedCrop() } }
         }
         .sheet(item: $cropSelection) { request in
-            PhotoCropView(image: request.preview, targetPixelSize: request.pixelSize) { center in
+            PhotoCropView(image: request.preview, targetPixelSize: request.pixelSize) { center, size in
                 try await edits.stagePhoto(for: request.target, channelOrder: request.channelOrder,
-                                           cropCenter: center, expectedPixelSize: request.pixelSize) { request.data }
+                                           cropCenter: center, expectedPixelSize: request.pixelSize,
+                                           outputPixelSize: size) { request.data }
             }
         }
         .confirmationDialog(L("CACHE_RESTORE_ALL_TITLE"), isPresented: $showRestoreAllConfirm) {

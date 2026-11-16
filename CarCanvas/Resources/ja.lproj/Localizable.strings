@@ -69,6 +69,13 @@
 "CROP_TITLE" = "壁紙をトリミング";
 "CROP_HINT" = "写真をドラッグして残す範囲を選びます。確定しても変更は一時保存されるだけです。";
 "CROP_USE_PHOTO" = "この写真を使う";
+"CROP_WIDTH" = "幅（ピクセル）";
+"CROP_HEIGHT" = "高さ（ピクセル）";
+"CROP_SIZE_HINT" = "より快適に使用するため、車の CarPlay 表示領域のサイズをピクセル単位で入力してください。";
+"CROP_SIZE_INVALID" = "有効なピクセル数を入力してください。各辺は16384以下、合計は33554432ピクセル以下です。";
+"CROP_RATIOS" = "一般的な比率";
+"CROP_SYSTEM_SIZE" = "システムのサイズ";
+"CROP_CUSTOM_SIZE_UNAVAILABLE" = "このカスタムサイズをシステムで変換できませんでした。壁紙のシステムサイズに戻して再試行してください。";
 "GUIDE_TITLE" = "セットアップ手順";
 "HISTORY_CLEAR_ALL" = "すべて削除";
 "HISTORY_CLEAR_MESSAGE" = "保存履歴をすべて削除しますか？履歴専用のファイルも削除されます。";

@@ -69,6 +69,13 @@
 "CROP_TITLE" = "Crop Wallpaper";
 "CROP_HINT" = "Drag the photo to choose which part to keep. Confirming only stages the change.";
 "CROP_USE_PHOTO" = "Use Photo";
+"CROP_WIDTH" = "Width (pixels)";
+"CROP_HEIGHT" = "Height (pixels)";
+"CROP_SIZE_HINT" = "For a better experience, enter the size of your vehicle's CarPlay display area in pixels.";
+"CROP_SIZE_INVALID" = "Enter valid pixel dimensions: up to 16384 per side and 33554432 pixels in total.";
+"CROP_RATIOS" = "Common ratios";
+"CROP_SYSTEM_SIZE" = "System size";
+"CROP_CUSTOM_SIZE_UNAVAILABLE" = "The system could not encode this custom size. Restore the system wallpaper size and try again.";
 "GUIDE_TITLE" = "Setup Guide";
 "HISTORY_CLEAR_ALL" = "Clear All";
 "HISTORY_CLEAR_MESSAGE" = "Delete all saved CPBitmap history entries? Files kept only in history will be removed.";

@@ -69,6 +69,13 @@
 "CROP_TITLE" = "裁剪壁纸";
 "CROP_HINT" = "拖动照片调整保留的区域，确认后仅暂存。";
 "CROP_USE_PHOTO" = "使用照片";
+"CROP_WIDTH" = "宽度（像素）";
+"CROP_HEIGHT" = "高度（像素）";
+"CROP_SIZE_HINT" = "建议输入车辆 CarPlay 窗口尺寸（像素），以获得更好的体验。";
+"CROP_SIZE_INVALID" = "请输入有效的像素宽高，每边不超过 16384，总像素不超过 33554432。";
+"CROP_RATIOS" = "常见比例";
+"CROP_SYSTEM_SIZE" = "系统尺寸";
+"CROP_CUSTOM_SIZE_UNAVAILABLE" = "系统无法编码自定义尺寸，请恢复系统壁纸尺寸后重试。";
 "GUIDE_TITLE" = "设置指南";
 "HISTORY_CLEAR_ALL" = "全部清除";
 "HISTORY_CLEAR_MESSAGE" = "要删除所有已保存的 CPBitmap 历史记录吗？仅保留在历史记录中的文件也会被删除。";

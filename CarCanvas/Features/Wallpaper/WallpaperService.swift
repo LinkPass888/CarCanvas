@@ -38,19 +38,24 @@ final class WallpaperService {
 
     func replacementData(imageURL: URL, target: WallpaperTarget,
                          cropCenter: CGPoint = CGPoint(x: 0.5, y: 0.5),
-                         expectedPixelSize: CGSize? = nil) throws -> Data {
+                         expectedPixelSize: CGSize? = nil, outputPixelSize: CGSize? = nil) throws -> Data {
         try prepareReplacement(imageURL: imageURL, target: target, cropCenter: cropCenter,
-                               expectedPixelSize: expectedPixelSize).data
+                               expectedPixelSize: expectedPixelSize, outputPixelSize: outputPixelSize).data
     }
 
     func prepareReplacement(imageURL: URL, target: WallpaperTarget,
                             cropCenter: CGPoint = CGPoint(x: 0.5, y: 0.5),
-                            expectedPixelSize: CGSize? = nil) throws -> (data: Data, preview: CGImage) {
+                            expectedPixelSize: CGSize? = nil,
+                            outputPixelSize: CGSize? = nil) throws -> (data: Data, preview: CGImage) {
         try autoreleasepool {
             let reference = try originalReference(for: target)
-            let size = reference.size
-            guard expectedPixelSize == nil || expectedPixelSize == size,
-                  cropCenter.x.isFinite, cropCenter.y.isFinite else { throw CCError.renderFailed }
+            let size = outputPixelSize ?? reference.size
+            guard expectedPixelSize == nil || expectedPixelSize == reference.size,
+                  cropCenter.x.isFinite, cropCenter.y.isFinite,
+                  size.width.isFinite, size.height.isFinite,
+                  size.width >= 1, size.height >= 1, size.width <= 16_384, size.height <= 16_384,
+                  size.width.rounded() == size.width, size.height.rounded() == size.height,
+                  size.width * size.height <= 32 * 1024 * 1024 else { throw CCError.renderFailed }
             let image = try croppedImage(photo(at: imageURL), size: size, center: cropCenter)
             let data = try encode(image, fallbackData: reference.data, expectedPixelSize: size)
             guard let preview = Self.thumbnail(image) else { throw CCError.renderFailed }
@@ -205,7 +210,14 @@ final class WallpaperService {
             }
             CCLog.info("system CPBitmap writer failed (\(writeError?.localizedDescription ?? "empty output")); using validated template")
         }
-        if let fallbackData { return try CPBitmapTemplate.parse(fallbackData).render(image: image, order: channelOrder) }
+        if let fallbackData {
+            let template = try CPBitmapTemplate.parse(fallbackData)
+            guard expectedPixelSize == nil || expectedPixelSize == CGSize(width: CGFloat(template.width), height: CGFloat(template.height)) else {
+                throw NSError(domain: "CarCanvas.PhotoCrop", code: 1,
+                              userInfo: [NSLocalizedDescriptionKey: L("CROP_CUSTOM_SIZE_UNAVAILABLE")])
+            }
+            return try template.render(image: image, order: channelOrder)
+        }
         if let fallbackTemplate { return try fallbackTemplate.render(image: image, order: channelOrder) }
         return try loadTemplate(for: target).render(image: image, order: channelOrder)
     }

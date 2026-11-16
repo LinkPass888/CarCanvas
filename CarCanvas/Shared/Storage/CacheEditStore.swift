@@ -152,7 +152,7 @@ final class CacheEditStore: ObservableObject {
     @MainActor
     func stagePhoto(for target: WallpaperTarget, channelOrder: CPBitmapTemplate.ChannelOrder,
                     cropCenter: CGPoint = CGPoint(x: 0.5, y: 0.5), expectedPixelSize: CGSize? = nil,
-                    loadPhoto: () async throws -> Data) async throws {
+                    outputPixelSize: CGSize? = nil, loadPhoto: () async throws -> Data) async throws {
         try beginWork()
         defer { isWorking = false }
         let data = try await loadPhoto()
@@ -162,7 +162,8 @@ final class CacheEditStore: ObservableObject {
             defer { try? FileManager.default.removeItem(at: temporary) }
             try data.write(to: temporary, options: .atomic)
             let prepared = try WallpaperService(channelOrder: channelOrder).prepareReplacement(
-                imageURL: temporary, target: target, cropCenter: cropCenter, expectedPixelSize: expectedPixelSize)
+                imageURL: temporary, target: target, cropCenter: cropCenter, expectedPixelSize: expectedPixelSize,
+                outputPixelSize: outputPixelSize)
             try self.saveReplacement(target: target, payload: prepared.data, thumbnail: prepared.preview)
         }.value
     }
