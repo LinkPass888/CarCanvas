@@ -81,12 +81,6 @@ struct PhotoCropView: View {
                             .resizable()
                             .frame(width: scaled.width, height: scaled.height)
                             .offset(x: offset.width, y: offset.height)
-                        Path { path in
-                            path.addRect(CGRect(origin: .zero, size: proxy.size))
-                            path.addRect(CGRect(x: (proxy.size.width - frame.width) / 2,
-                                                y: (proxy.size.height - frame.height) / 2,
-                                                width: frame.width, height: frame.height))
-                        }.fill(Color(uiColor: .systemBackground).opacity(0.6), style: FillStyle(eoFill: true))
                         Rectangle().stroke(Color.secondary, lineWidth: 1)
                             .frame(width: frame.width, height: frame.height)
                     }
