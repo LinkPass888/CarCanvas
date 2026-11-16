@@ -27,6 +27,44 @@ enum WQWhitelist {
         path == carPlayPreferencesPath || path == "/private" + carPlayPreferencesPath
     }
 
+    /// Forensics only: the explicit files inside the verified CarPlayWallpaper
+    /// container that could tie a wallpaper identifier to a vehicle. They are
+    /// read through the container extension that is already granted, so no
+    /// entry here widens what may be granted, and none is ever built from user
+    /// input.
+    static let containerDiagnosticFiles: [String] = [
+        "Library/Preferences/com.apple.CarPlayWallpaper.plist",
+        "Library/Preferences/com.apple.CarPlayApp.plist",
+        "Library/Preferences/com.apple.carplay.plist"
+    ]
+
+    /// Directories whose *entry names* the forensic log may list. Names only:
+    /// a listed entry never becomes a readable path.
+    static let containerDiagnosticDirectories: [String] = [
+        "Library",
+        "Library/Preferences",
+        "Library/Caches/MappedImageCache"
+    ]
+
+    /// Bundle identifiers whose own data container ContainerManager may report.
+    /// Path lookup only: no extension is consumed for them and nothing outside
+    /// the verified container is read.
+    static let carPlayRelatedBundleIDs: [String] = [
+        "com.apple.carplay",
+        "com.apple.CarPlayApp",
+        "com.apple.CarPlayWallpaper"
+    ]
+
+    static func isAllowedContainerDiagnosticFile(_ path: String, in containerPath: String) -> Bool {
+        guard canonicalContainerPath(containerPath) != nil else { return false }
+        return containerDiagnosticFiles.contains { path == containerPath + "/" + $0 }
+    }
+
+    static func isAllowedContainerDiagnosticDirectory(_ path: String, in containerPath: String) -> Bool {
+        guard canonicalContainerPath(containerPath) != nil else { return false }
+        return containerDiagnosticDirectories.contains { path == containerPath + "/" + $0 }
+    }
+
     /// The original app used `CARWallpaper<Color>-Dark.cpbitmap` /
     /// `-Light.cpbitmap`; READMEs also document a device-dependent `-14`
     /// variant before the extension. Accept both, and nothing else.

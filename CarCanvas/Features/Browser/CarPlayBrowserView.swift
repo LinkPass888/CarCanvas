@@ -453,7 +453,14 @@ final class CarPlayBrowserStore: ObservableObject {
                 }.value
                 if currentRevision == revision { devices = paired; deviceError = nil }
             } catch {
-                if currentRevision == revision { devices = []; deviceError = error.localizedDescription }
+                let diagnostic = error.localizedDescription
+                // The refused routes leave one question open: whether the one
+                // container we can read records the vehicle mapping itself.
+                // The log-only probe answers it on the next device run.
+                await Task.detached(priority: .utility) {
+                    CarPlayDeviceProbe.diagnoseContainerContents()
+                }.value
+                if currentRevision == revision { devices = []; deviceError = diagnostic }
             }
             do {
                 let snapshot = try await Task.detached(priority: .userInitiated) {
