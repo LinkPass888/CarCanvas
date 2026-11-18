@@ -17,8 +17,9 @@ struct PhotoCropView: View {
     let onSaveCropSize: (SettingsStore.CropSize?) -> Void
     let onConfirm: (CGPoint, CGSize) async throws -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     @State private var center = CGPoint(x: 0.5, y: 0.5)
-    @GestureState private var dragTranslation: CGSize?
+    @GestureState private var dragOffset = CGSize.zero
     @State private var isSaving = false
     @State private var errorMessage: String?
     @State private var widthInput: String
@@ -122,9 +123,8 @@ struct PhotoCropView: View {
                     let frame = CGSize(width: max(1, size.width * fitScale), height: max(1, size.height * fitScale))
                     let scale = max(frame.width / CGFloat(image.width), frame.height / CGFloat(image.height))
                     let scaled = CGSize(width: CGFloat(image.width) * scale, height: CGFloat(image.height) * scale)
-                    let offset = clampedOffset(scaled: scaled, frame: frame, translation: dragTranslation ?? .zero)
-                    let stageColor = Color(uiColor: .secondarySystemBackground)
-                    stageColor
+                    let offset = clampedOffset(scaled: scaled, frame: frame, translation: dragOffset)
+                    Color(uiColor: .secondarySystemBackground)
                         .overlay {
                             Image(decorative: image, scale: 1)
                                 .resizable()
@@ -132,7 +132,8 @@ struct PhotoCropView: View {
                                 .offset(x: offset.width, y: offset.height)
                         }
                         .overlay {
-                            CropFrameOverlay(frameSize: frame, scrimColor: stageColor, isDragging: dragTranslation != nil)
+                            CropFrameOverlay(frameSize: frame, colorScheme: colorScheme)
+                                .equatable()
                                 .allowsHitTesting(false)
                         }
                         .frame(width: proxy.size.width, height: proxy.size.height)
@@ -143,8 +144,8 @@ struct PhotoCropView: View {
                                 .allowsHitTesting(false)
                         }
                         .contentShape(Rectangle())
-                        .gesture(DragGesture()
-                            .updating($dragTranslation) { value, state, _ in state = value.translation }
+                        .gesture(DragGesture(minimumDistance: 1)
+                            .updating($dragOffset) { value, state, _ in state = value.translation }
                             .onEnded { value in
                                 let offset = clampedOffset(scaled: scaled, frame: frame, translation: value.translation)
                                 center = CGPoint(x: 0.5 - offset.width / scaled.width,
@@ -249,10 +250,9 @@ struct PhotoCropView: View {
 /// High-contrast crop overlay locked to the viewport's own coordinate space so
 /// oversized scaled photos never shift the cutout, with dual dark/light strokes
 /// that stay legible on pure white, pure black and colorful wallpapers alike.
-private struct CropFrameOverlay: View {
+private struct CropFrameOverlay: View, Equatable {
     let frameSize: CGSize
-    let scrimColor: Color
-    let isDragging: Bool
+    let colorScheme: ColorScheme
 
     var body: some View {
         Canvas { context, canvasSize in
@@ -265,7 +265,7 @@ private struct CropFrameOverlay: View {
             scrim.addRect(CGRect(origin: .zero, size: canvasSize))
             scrim.addRect(cropRect)
             context.fill(scrim,
-                         with: .color(scrimColor.opacity(isDragging ? 0.50 : 0.70)),
+                         with: .color(Color(uiColor: .secondarySystemBackground).opacity(0.50)),
                          style: FillStyle(eoFill: true))
 
             if cropRect.width >= 30, cropRect.height >= 30 {
@@ -278,8 +278,8 @@ private struct CropFrameOverlay: View {
                     grid.move(to: CGPoint(x: cropRect.minX, y: y))
                     grid.addLine(to: CGPoint(x: cropRect.maxX, y: y))
                 }
-                context.stroke(grid, with: .color(.black.opacity(isDragging ? 0.45 : 0.28)), lineWidth: 1.5)
-                context.stroke(grid, with: .color(.white.opacity(isDragging ? 0.85 : 0.45)), lineWidth: 0.75)
+                context.stroke(grid, with: .color(.black.opacity(0.30)), lineWidth: 1.5)
+                context.stroke(grid, with: .color(.white.opacity(0.55)), lineWidth: 0.75)
             }
 
             let outerBorder = Path(cropRect.insetBy(dx: -0.75, dy: -0.75))
