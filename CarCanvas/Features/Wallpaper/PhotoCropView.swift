@@ -123,7 +123,8 @@ struct PhotoCropView: View {
                     let scale = max(frame.width / CGFloat(image.width), frame.height / CGFloat(image.height))
                     let scaled = CGSize(width: CGFloat(image.width) * scale, height: CGFloat(image.height) * scale)
                     let offset = clampedOffset(scaled: scaled, frame: frame, translation: dragTranslation ?? .zero)
-                    Color(white: 0.10)
+                    let stageColor = Color(uiColor: .secondarySystemBackground)
+                    stageColor
                         .overlay {
                             Image(decorative: image, scale: 1)
                                 .resizable()
@@ -131,14 +132,14 @@ struct PhotoCropView: View {
                                 .offset(x: offset.width, y: offset.height)
                         }
                         .overlay {
-                            CropFrameOverlay(frameSize: frame, isDragging: dragTranslation != nil)
+                            CropFrameOverlay(frameSize: frame, scrimColor: stageColor, isDragging: dragTranslation != nil)
                                 .allowsHitTesting(false)
                         }
                         .frame(width: proxy.size.width, height: proxy.size.height)
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .overlay {
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+                                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
                                 .allowsHitTesting(false)
                         }
                         .contentShape(Rectangle())
@@ -250,6 +251,7 @@ struct PhotoCropView: View {
 /// that stay legible on pure white, pure black and colorful wallpapers alike.
 private struct CropFrameOverlay: View {
     let frameSize: CGSize
+    let scrimColor: Color
     let isDragging: Bool
 
     var body: some View {
@@ -263,7 +265,7 @@ private struct CropFrameOverlay: View {
             scrim.addRect(CGRect(origin: .zero, size: canvasSize))
             scrim.addRect(cropRect)
             context.fill(scrim,
-                         with: .color(.black.opacity(isDragging ? 0.42 : 0.58)),
+                         with: .color(scrimColor.opacity(isDragging ? 0.50 : 0.70)),
                          style: FillStyle(eoFill: true))
 
             if cropRect.width >= 30, cropRect.height >= 30 {
