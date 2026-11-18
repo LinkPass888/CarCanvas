@@ -2,6 +2,13 @@
 
 **English** · [简体中文](CHANGELOG.zh.md) · [日本語](CHANGELOG.ja.md)
 
+## 2.1.2 — build 7
+
+### Changed
+- **High-contrast adaptive crop frame.** Redesigned the crop overlay with dual-contrast borders, bold corner brackets and rule-of-thirds guides over an adaptive light/dark stage and 50% outer scrim, staying legible across pure white, pure black and busy wallpapers while highlighting the active size or ratio preset.
+- **Smoother crop dragging.** Cached the static crop overlay during gestures and lowered the drag activation threshold to 1pt to eliminate initial stutter.
+- **Versioned release IPA filename.** Packaged unsigned IPA artifacts now include the version string (`CarCanvas-v<version>-unsigned.ipa`, e.g. `CarCanvas-v2.1.2-unsigned.ipa`).
+
 ## 2.1.1 — build 6
 
 ### Added
