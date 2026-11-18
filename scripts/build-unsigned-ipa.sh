@@ -13,7 +13,7 @@ STAGE="$ROOT/.build/ipa-stage"
 LANGS=(en ja zh-Hans)
 
 mkdir -p "$OUT" "$DERIVED" "$STAGE"
-rm -f "$OUT/CarCanvas-unsigned.ipa" "$OUT/build-report.txt"
+rm -f "$OUT"/CarCanvas*.ipa "$OUT/build-report.txt"
 rm -rf "$STAGE"
 mkdir -p "$STAGE"
 
@@ -46,11 +46,19 @@ for lang in "${LANGS[@]}"; do
   done
 done
 
+PB=/usr/libexec/PlistBuddy
+VERSION="$($PB -c "Print :CFBundleShortVersionString" "$APP/Info.plist")"
+if [[ ! "$VERSION" =~ ^[0-9A-Za-z._-]+$ ]]; then
+  echo "ERROR: invalid CFBundleShortVersionString: '$VERSION'"
+  exit 1
+fi
+IPA="$OUT/CarCanvas-v${VERSION}-unsigned.ipa"
+
 echo "==> package Payload/"
 mkdir -p "$STAGE/Payload"
 cp -R "$APP" "$STAGE/Payload/"
 find "$STAGE" -name '.DS_Store' -delete
-(cd "$STAGE" && zip -qry "$OUT/CarCanvas-unsigned.ipa" Payload)
+(cd "$STAGE" && zip -qry "$IPA" Payload)
 
 echo "==> self-check"
 REPORT="$OUT/build-report.txt"
@@ -62,11 +70,11 @@ REPORT="$OUT/build-report.txt"
   echo "SDK:         $(xcrun --sdk iphoneos --show-sdk-version)"
   echo
   echo "-- archive integrity --"
-  unzip -t "$OUT/CarCanvas-unsigned.ipa"
+  unzip -t "$IPA"
   echo
   echo "-- first entry --"
   LIST="$(mktemp)"
-  unzip -Z1 "$OUT/CarCanvas-unsigned.ipa" > "$LIST"
+  unzip -Z1 "$IPA" > "$LIST"
   FIRST="$(head -n 1 "$LIST")"
   echo "$FIRST"
   [ "$FIRST" = "Payload/" ] || { echo "ERROR: first entry must be Payload/"; exit 1; }
@@ -91,18 +99,17 @@ REPORT="$OUT/build-report.txt"
   fi
   echo
   echo "-- Info.plist --"
-  PB=/usr/libexec/PlistBuddy
   for key in CFBundleIdentifier CFBundleShortVersionString CFBundleVersion CFBundleLocalizations MinimumOSVersion; do
     echo "$key = $($PB -c "Print :$key" "$APP/Info.plist" 2>&1 || true)"
   done
   echo
   echo "-- SHA-256 --"
-  shasum -a 256 "$OUT/CarCanvas-unsigned.ipa"
+  shasum -a 256 "$IPA"
 } > "$REPORT" 2>&1
 rm -f "$LIST"
 
 echo "==> done"
-sha="$(shasum -a 256 "$OUT/CarCanvas-unsigned.ipa" | awk '{print $1}')"
-echo "IPA:    $OUT/CarCanvas-unsigned.ipa"
+sha="$(shasum -a 256 "$IPA" | awk '{print $1}')"
+echo "IPA:    $IPA"
 echo "SHA256: $sha"
 echo "Report: $REPORT"

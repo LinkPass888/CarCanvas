@@ -4,9 +4,27 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+    # Note: GitHub Actions ignores paths-ignore for tag pushes, so v* tags
+    # always build and release even when the tagged commit only updated docs.
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - 'THIRD_PARTY_LICENSES/**'
+      - '.gitignore'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - 'THIRD_PARTY_LICENSES/**'
+      - '.gitignore'
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 permissions:
   contents: read
@@ -51,7 +69,7 @@ jobs:
         with:
           name: CarCanvas-unsigned-ipa
           path: |
-            artifacts/CarCanvas-unsigned.ipa
+            artifacts/CarCanvas-v*-unsigned.ipa
             artifacts/build-report.txt
           if-no-files-found: error
           retention-days: 14
@@ -69,12 +87,17 @@ jobs:
         with:
           name: CarCanvas-unsigned-ipa
           path: artifacts
+      - name: Extract three-language release notes
+        run: python3 scripts/extract-release-notes.py "${GITHUB_REF_NAME}" -o artifacts/release-notes.md
       - name: Create release and upload IPA
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          shopt -s nullglob
+          ipas=(artifacts/CarCanvas-v*-unsigned.ipa)
+          [ "${#ipas[@]}" -eq 1 ] || { echo "ERROR: expected 1 IPA in artifacts/, found ${#ipas[@]}"; exit 1; }
           gh release create "${GITHUB_REF_NAME}" \
-            artifacts/CarCanvas-unsigned.ipa \
+            "${ipas[0]}" \
             artifacts/build-report.txt \
             --title "CarCanvas ${GITHUB_REF_NAME}" \
-            --notes "Unsigned IPA built by GitHub Actions. Sign it with your own App Group-capable profile before installing. See README.md."
+            --notes-file artifacts/release-notes.md

@@ -18,7 +18,7 @@ struct PhotoCropView: View {
     let onConfirm: (CGPoint, CGSize) async throws -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var center = CGPoint(x: 0.5, y: 0.5)
-    @GestureState private var dragOffset = CGSize.zero
+    @GestureState private var dragTranslation: CGSize?
     @State private var isSaving = false
     @State private var errorMessage: String?
     @State private var widthInput: String
@@ -116,26 +116,34 @@ struct PhotoCropView: View {
                 }
                 GeometryReader { proxy in
                     let size = outputPixelSize ?? targetPixelSize
-                    let maxW = max(1, proxy.size.width * 0.8)
-                    let maxH = max(1, proxy.size.height * 0.8)
+                    let maxW = max(1, proxy.size.width * 0.86)
+                    let maxH = max(1, proxy.size.height * 0.86)
                     let fitScale = min(maxW / max(1, size.width), maxH / max(1, size.height))
                     let frame = CGSize(width: max(1, size.width * fitScale), height: max(1, size.height * fitScale))
                     let scale = max(frame.width / CGFloat(image.width), frame.height / CGFloat(image.height))
                     let scaled = CGSize(width: CGFloat(image.width) * scale, height: CGFloat(image.height) * scale)
-                    let offset = clampedOffset(scaled: scaled, frame: frame, translation: dragOffset)
-                    ZStack {
-                        Image(decorative: image, scale: 1)
-                            .resizable()
-                            .frame(width: scaled.width, height: scaled.height)
-                            .offset(x: offset.width, y: offset.height)
-                        Rectangle().stroke(Color.secondary, lineWidth: 1)
-                            .frame(width: frame.width, height: frame.height)
-                    }
+                    let offset = clampedOffset(scaled: scaled, frame: frame, translation: dragTranslation ?? .zero)
+                    Color(white: 0.10)
+                        .overlay {
+                            Image(decorative: image, scale: 1)
+                                .resizable()
+                                .frame(width: scaled.width, height: scaled.height)
+                                .offset(x: offset.width, y: offset.height)
+                        }
+                        .overlay {
+                            CropFrameOverlay(frameSize: frame, isDragging: dragTranslation != nil)
+                                .allowsHitTesting(false)
+                        }
                         .frame(width: proxy.size.width, height: proxy.size.height)
-                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+                                .allowsHitTesting(false)
+                        }
                         .contentShape(Rectangle())
                         .gesture(DragGesture()
-                            .updating($dragOffset) { value, state, _ in state = value.translation }
+                            .updating($dragTranslation) { value, state, _ in state = value.translation }
                             .onEnded { value in
                                 let offset = clampedOffset(scaled: scaled, frame: frame, translation: value.translation)
                                 center = CGPoint(x: 0.5 - offset.width / scaled.width,
@@ -155,8 +163,10 @@ struct PhotoCropView: View {
                                 usesCustomSize = false
                                 referenceEdge = max(1, max(systemWidth, systemHeight))
                             }
+                            .tint(usesCustomSize ? .secondary : .accentColor)
                             ForEach(Self.ratios.indices, id: \.self) { index in
                                 Button(Self.ratios[index].0) { selectRatio(index) }
+                                    .tint(isMatchingRatio(index) ? .accentColor : .secondary)
                             }
                         }.buttonStyle(.bordered).controlSize(.small)
                     }.frame(height: 44)
@@ -193,6 +203,12 @@ struct PhotoCropView: View {
                       height: min(limitY, max(-limitY, (0.5 - center.y) * scaled.height + translation.height)))
     }
 
+    private func isMatchingRatio(_ index: Int) -> Bool {
+        guard usesCustomSize, let size = parsedCropSize else { return false }
+        let ratio = Self.ratios[index]
+        return size.width * ratio.2 == size.height * ratio.1
+    }
+
     private func selectRatio(_ index: Int) {
         let ratio = Self.ratios[index]
         let edge = max(1, referenceEdge)
@@ -225,6 +241,76 @@ struct PhotoCropView: View {
                 dismiss()
             } catch { errorMessage = error.localizedDescription }
             isSaving = false
+        }
+    }
+}
+
+/// High-contrast crop overlay locked to the viewport's own coordinate space so
+/// oversized scaled photos never shift the cutout, with dual dark/light strokes
+/// that stay legible on pure white, pure black and colorful wallpapers alike.
+private struct CropFrameOverlay: View {
+    let frameSize: CGSize
+    let isDragging: Bool
+
+    var body: some View {
+        Canvas { context, canvasSize in
+            let cropRect = CGRect(x: (canvasSize.width - frameSize.width) / 2,
+                                  y: (canvasSize.height - frameSize.height) / 2,
+                                  width: frameSize.width,
+                                  height: frameSize.height)
+
+            var scrim = Path()
+            scrim.addRect(CGRect(origin: .zero, size: canvasSize))
+            scrim.addRect(cropRect)
+            context.fill(scrim,
+                         with: .color(.black.opacity(isDragging ? 0.42 : 0.58)),
+                         style: FillStyle(eoFill: true))
+
+            if cropRect.width >= 30, cropRect.height >= 30 {
+                var grid = Path()
+                for step in 1...2 {
+                    let x = cropRect.minX + cropRect.width * CGFloat(step) / 3
+                    grid.move(to: CGPoint(x: x, y: cropRect.minY))
+                    grid.addLine(to: CGPoint(x: x, y: cropRect.maxY))
+                    let y = cropRect.minY + cropRect.height * CGFloat(step) / 3
+                    grid.move(to: CGPoint(x: cropRect.minX, y: y))
+                    grid.addLine(to: CGPoint(x: cropRect.maxX, y: y))
+                }
+                context.stroke(grid, with: .color(.black.opacity(isDragging ? 0.45 : 0.28)), lineWidth: 1.5)
+                context.stroke(grid, with: .color(.white.opacity(isDragging ? 0.85 : 0.45)), lineWidth: 0.75)
+            }
+
+            let outerBorder = Path(cropRect.insetBy(dx: -0.75, dy: -0.75))
+            let innerBorder = Path(cropRect)
+            context.stroke(outerBorder, with: .color(.black.opacity(0.75)), lineWidth: 1.5)
+            context.stroke(innerBorder, with: .color(.white), lineWidth: 1.5)
+
+            let minSide = min(cropRect.width, cropRect.height)
+            if minSide >= 16 {
+                let arm = min(20, max(7, minSide * 0.25))
+                let r = cropRect.insetBy(dx: -0.5, dy: -0.5)
+                var corners = Path()
+                corners.move(to: CGPoint(x: r.minX, y: r.minY + arm))
+                corners.addLine(to: CGPoint(x: r.minX, y: r.minY))
+                corners.addLine(to: CGPoint(x: r.minX + arm, y: r.minY))
+
+                corners.move(to: CGPoint(x: r.maxX - arm, y: r.minY))
+                corners.addLine(to: CGPoint(x: r.maxX, y: r.minY))
+                corners.addLine(to: CGPoint(x: r.maxX, y: r.minY + arm))
+
+                corners.move(to: CGPoint(x: r.minX, y: r.maxY - arm))
+                corners.addLine(to: CGPoint(x: r.minX, y: r.maxY))
+                corners.addLine(to: CGPoint(x: r.minX + arm, y: r.maxY))
+
+                corners.move(to: CGPoint(x: r.maxX - arm, y: r.maxY))
+                corners.addLine(to: CGPoint(x: r.maxX, y: r.maxY))
+                corners.addLine(to: CGPoint(x: r.maxX, y: r.maxY - arm))
+
+                context.stroke(corners, with: .color(.black.opacity(0.65)),
+                               style: StrokeStyle(lineWidth: 5, lineCap: .square, lineJoin: .miter))
+                context.stroke(corners, with: .color(.white),
+                               style: StrokeStyle(lineWidth: 3, lineCap: .square, lineJoin: .miter))
+            }
         }
     }
 }
