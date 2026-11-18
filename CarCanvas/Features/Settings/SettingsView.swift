@@ -12,6 +12,11 @@ struct SettingsView: View {
     @State private var messageIsError = false
 
     private var entitledGroups: [String] { WQAccess.shared.entitledGroups }
+    private var appVersion: String {
+        let short = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "-"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "-"
+        return "\(short) (\(build))"
+    }
 
     var body: some View {
         Form {
@@ -32,7 +37,7 @@ struct SettingsView: View {
             }
 
             Section(L("SETTINGS_SECTION_ABOUT")) {
-                LabeledContent("Version", value: "2.0.2 (4)")
+                LabeledContent("Version", value: appVersion)
                 LabeledContent("Bundle", value: Bundle.main.bundleIdentifier ?? "-")
                 LabeledContent("App Group", value: WQAccess.shared.appGroupIdentifier ?? "NONE")
                 if entitledGroups.isEmpty {

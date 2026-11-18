@@ -53,7 +53,7 @@ bash scripts/build-unsigned-ipa.sh
 
 [GPL-3.0-or-later](LICENSE) · [组件许可](THIRD_PARTY_LICENSES/README.md)
 
-感谢 [worse_query](https://github.com/forcequitOS/worse_query) 与 [原始 CarCanvas](https://github.com/Dcsyhi/CarCanvas)。
+感谢 [worse_query](https://github.com/forcequitOS/worse_query) 与 [原始 CarCanvas](https://github.com/Dcsyhi1998/CarCanvas)。
 
 [Telegram 频道](https://t.me/linkpass666) · [爱发电](https://afdian.com/a/linkpass)
 

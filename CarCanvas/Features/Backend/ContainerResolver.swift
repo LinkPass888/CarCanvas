@@ -25,13 +25,15 @@ final class ContainerResolver {
         private var minimumGeneration = 1
         private var isLoading = false
         private var isRefreshing = false
+        private var pendingForceRefresh = false
         private var loadingThread: Thread?
 
         func value(forceRefresh: Bool, load: () throws -> Resolved) throws -> Resolved {
             condition.lock()
             let requestedGeneration: Int
             if forceRefresh {
-                requestedGeneration = generation + (isLoading && isRefreshing ? 0 : 1)
+                pendingForceRefresh = true
+                requestedGeneration = max(minimumGeneration, generation + (isLoading && isRefreshing ? 0 : 1))
             } else if let cached {
                 condition.unlock()
                 return try cached.get()
@@ -58,8 +60,10 @@ final class ContainerResolver {
 
                 generation += 1
                 let currentGeneration = generation
+                let refresh = forceRefresh || pendingForceRefresh
+                pendingForceRefresh = false
                 isLoading = true
-                isRefreshing = forceRefresh
+                isRefreshing = refresh
                 loadingThread = Thread.current
                 condition.unlock()
                 let result = Result { try load() }

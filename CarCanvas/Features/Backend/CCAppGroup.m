@@ -17,7 +17,6 @@ typedef SecTaskRef (*CCTaskCreateFromSelfFn)(CFAllocatorRef);
 typedef CFTypeRef (*CCTaskCopyValueFn)(SecTaskRef, CFStringRef, CFErrorRef *);
 
 static NSString *CCResolvedGroup;
-static BOOL CCResolved = NO;
 
 static BOOL CCCopyEntitledGroups(NSMutableArray<NSString *> *groups)
 {
@@ -60,20 +59,21 @@ NSArray<NSString *> *CCAppGroupEntitledIdentifiers(void)
 
 NSString *CCAppGroupIdentifier(void)
 {
-    if (CCResolved) return CCResolvedGroup;
-    CCResolved = YES;
-
-    NSFileManager *files = [NSFileManager defaultManager];
-    for (NSString *candidate in CCAppGroupEntitledIdentifiers()) {
-        // Entitled is not the same as reachable: pick the one we can open.
-        if ([files containerURLForSecurityApplicationGroupIdentifier:candidate]) {
-            CCResolvedGroup = candidate;
-            break;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        NSArray<NSString *> *entitled = CCAppGroupEntitledIdentifiers();
+        NSFileManager *files = [NSFileManager defaultManager];
+        for (NSString *candidate in entitled) {
+            // Entitled is not the same as reachable: pick the one we can open.
+            if ([files containerURLForSecurityApplicationGroupIdentifier:candidate]) {
+                CCResolvedGroup = candidate;
+                break;
+            }
         }
-    }
-    NSLog(@"[CarCanvas] App Group: %@ (entitled: %@)",
-          CCResolvedGroup ?: @"NONE",
-          [CCAppGroupEntitledIdentifiers() componentsJoinedByString:@", "]);
+        NSLog(@"[CarCanvas] App Group: %@ (entitled: %@)",
+              CCResolvedGroup ?: @"NONE",
+              [entitled componentsJoinedByString:@", "]);
+    });
     return CCResolvedGroup;
 }
 

@@ -92,10 +92,10 @@ final class WallpaperService {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any],
               let width = properties[kCGImagePropertyPixelWidth as String] as? NSNumber,
-              let height = properties[kCGImagePropertyPixelHeight as String] as? NSNumber else { throw CCError.renderFailed }
-        let maximum = max(width.intValue, height.intValue)
-        guard maximum > 0, maximum <= 16_384,
-              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+              let height = properties[kCGImagePropertyPixelHeight as String] as? NSNumber,
+              width.intValue > 0, height.intValue > 0 else { throw CCError.renderFailed }
+        let maximum = min(max(width.intValue, height.intValue), 16_384)
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
                 kCGImageSourceCreateThumbnailFromImageAlways: true,
                 kCGImageSourceCreateThumbnailWithTransform: true,
                 kCGImageSourceShouldCacheImmediately: true,

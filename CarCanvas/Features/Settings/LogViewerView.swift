@@ -29,7 +29,9 @@ struct LogViewerView: View {
                             text = ""
                         }
                         Button(didCopy ? L("SETTINGS_LOG_COPIED") : L("SETTINGS_LOG_COPY")) {
-                            UIPasteboard.general.string = CCLog.snapshot()
+                            let latest = CCLog.snapshot()
+                            text = latest
+                            UIPasteboard.general.string = latest
                             didCopy = true
                             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                                 didCopy = false

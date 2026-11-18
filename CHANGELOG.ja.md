@@ -1,6 +1,6 @@
-# Changelog
+# 更新履歴
 
-**English** · [简体中文](CHANGELOG.zh.md) · [日本語](CHANGELOG.ja.md)
+[English](CHANGELOG.md) · [简体中文](CHANGELOG.zh.md) · **日本語**
 
 ## 2.1.0 — build 5
 

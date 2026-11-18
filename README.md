@@ -53,7 +53,7 @@ bash scripts/build-unsigned-ipa.sh
 
 [GPL-3.0-or-later](LICENSE) · [Component licenses](THIRD_PARTY_LICENSES/README.md)
 
-Thanks to [worse_query](https://github.com/forcequitOS/worse_query) and the [original CarCanvas](https://github.com/Dcsyhi/CarCanvas).
+Thanks to [worse_query](https://github.com/forcequitOS/worse_query) and the [original CarCanvas](https://github.com/Dcsyhi1998/CarCanvas).
 
 [Telegram](https://t.me/linkpass666) · [Afdian](https://afdian.com/a/linkpass)
 

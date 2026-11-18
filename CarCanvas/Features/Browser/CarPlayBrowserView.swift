@@ -47,13 +47,14 @@ struct CarPlayBrowserView: View {
                     }
                 }
                 ForEach(displayedTargets) { target in
-                    CacheTargetRow(target: target, image: preview(for: target), pixelSize: pixelSize(for: target), status: status(for: target),
+                    CacheTargetRow(target: target, image: preview(for: target), byteCount: byteCount(for: target),
+                                   pixelSize: pixelSize(for: target), status: status(for: target),
                                    canPick: canPick(target), canRestore: canRestore(target),
-                                   canClear: hasPending(target) && edits.isReady && !edits.isWorking,
+                                   canClear: hasPending(target) && edits.isReady && !edits.isWorking && !isPreparingCrop,
                                    onPick: { pick(target) }, onRestore: { restore(target) },
                                    onClear: { clear(target) })
                 }
-                if edits.isWorking { ProgressView(L("COMMON_PLEASE_WAIT")) }
+                if edits.isWorking || isPreparingCrop { ProgressView(L("COMMON_PLEASE_WAIT")) }
             } header: {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(L("BROWSER_TITLE"))
@@ -87,7 +88,8 @@ struct CarPlayBrowserView: View {
                     Button(L("WALLPAPER_RESTORE")) { showRestoreAllConfirm = true }
                         .buttonStyle(.bordered).controlSize(.small)
                         .disabled(currentBackups.isEmpty || !currentBackupFailures.isEmpty
-                                  || edits.isWorking || !edits.isReady || store.isLoading || store.cacheDirectory == nil)
+                                  || edits.isWorking || !edits.isReady || store.isLoading || isPreparingCrop
+                                  || store.cacheDirectory == nil)
                 }.textCase(nil)
             }
         }
@@ -116,17 +118,22 @@ struct CarPlayBrowserView: View {
             }
         }
         .task { await store.load() }
-        .refreshable { if !edits.isWorking { await store.load(forceRefresh: true) } }
+        .refreshable { if !edits.isWorking && !isPreparingCrop { await store.load(forceRefresh: true) } }
         .photosPicker(isPresented: $showPhotoPicker, selection: $pickedItem, matching: .images)
         .onChange(of: pickedItem) { _, item in
             guard let item, let target = pickedTarget else { return }
             prepareCrop(item: item, target: target, channelOrder: settings.channelOrder)
         }
         .onChange(of: showPhotoPicker) { _, presented in
-            if !presented { Task { await Task.yield(); presentPreparedCrop() } }
+            if !presented {
+                if !isPreparingCrop && pickedItem == nil { pickedTarget = nil }
+                Task { await Task.yield(); presentPreparedCrop() }
+            }
         }
         .sheet(item: $cropSelection) { request in
-            PhotoCropView(image: request.preview, targetPixelSize: request.pixelSize) { center, size in
+            PhotoCropView(image: request.preview, targetPixelSize: request.pixelSize,
+                          customCropSize: settings.customCropSize,
+                          onSaveCropSize: { settings.customCropSize = $0 }) { center, size in
                 try await edits.stagePhoto(for: request.target, channelOrder: request.channelOrder,
                                            cropCenter: center, expectedPixelSize: request.pixelSize,
                                            outputPixelSize: size) { request.data }
@@ -178,6 +185,10 @@ struct CarPlayBrowserView: View {
         hasPending(target) ? edits.thumbnails[target.path] : store.thumbnails[target.path]
     }
 
+    private func byteCount(for target: WallpaperTarget) -> Int {
+        (hasPending(target) ? edits.byteCounts[target.path] : nil) ?? target.byteCount
+    }
+
     private func pixelSize(for target: WallpaperTarget) -> CGSize? {
         hasPending(target) ? edits.pixelSizes[target.path] : store.pixelSizes[target.path]
     }
@@ -198,7 +209,7 @@ struct CarPlayBrowserView: View {
     }
 
     private func canRestore(_ target: WallpaperTarget) -> Bool {
-        edits.isReady && !edits.isWorking && !store.isLoading && !hasPending(target)
+        edits.isReady && !edits.isWorking && !store.isLoading && !isPreparingCrop && !hasPending(target)
             && edits.appliedTargets.contains(where: { $0.path == target.path })
             && history.originalBackups.contains(where: { $0.cacheFileName == target.fileName })
             && !history.backupFailures.contains(target.fileName)
@@ -259,6 +270,7 @@ struct CarPlayBrowserView: View {
 private struct CacheTargetRow: View {
     let target: WallpaperTarget
     let image: CGImage?
+    let byteCount: Int
     let pixelSize: CGSize?
     let status: String?
     let canPick: Bool
@@ -301,7 +313,7 @@ private struct CacheTargetRow: View {
                 }.buttonStyle(.bordered).font(.footnote)
             }
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(ByteCountFormatter.string(fromByteCount: Int64(target.byteCount), countStyle: .file))
+                Text(ByteCountFormatter.string(fromByteCount: Int64(byteCount), countStyle: .file))
                 Text(pixelSize.map { "\(Int($0.width)) × \(Int($0.height))" } ?? "—")
                 if let status { Text(status).font(.caption) }
             }.font(.caption2).foregroundStyle(.secondary)
@@ -329,6 +341,7 @@ final class CarPlayBrowserStore: ObservableObject {
     private var minimumGeneration = 1
     private var revision = 0
     private var isRefreshing = false
+    private var pendingForceRefresh = false
     private var subscriptions: Set<AnyCancellable> = []
 
     private init() {
@@ -359,6 +372,7 @@ final class CarPlayBrowserStore: ObservableObject {
     func load(forceRefresh: Bool = false) async {
         let requestedGeneration: Int
         if forceRefresh {
+            pendingForceRefresh = true
             requestedGeneration = max(minimumGeneration, generation + (loadTask != nil && isRefreshing ? 0 : 1))
         } else {
             guard !hasLoadedOnce else { return }
@@ -380,13 +394,15 @@ final class CarPlayBrowserStore: ObservableObject {
         generation += 1
         let currentGeneration = generation, currentRevision = revision
         let channelOrder = SettingsStore.shared.channelOrder
-        isRefreshing = forceRefresh
+        let refresh = forceRefresh || pendingForceRefresh
+        pendingForceRefresh = false
+        isRefreshing = refresh
         isLoading = true
         error = nil
         let task = Task { @MainActor in
             do {
                 let snapshot = try await Task.detached(priority: .userInitiated) {
-                    let resolved = try ContainerResolver().resolve(forceRefresh: forceRefresh)
+                    let resolved = try ContainerResolver().resolve(forceRefresh: refresh)
                     let service = WallpaperService(channelOrder: channelOrder)
                     var images: [String: CGImage] = [:]
                     var sizes: [String: CGSize] = [:]

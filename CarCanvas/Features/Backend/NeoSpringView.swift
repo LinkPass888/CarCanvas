@@ -27,6 +27,11 @@ struct NeoSpringView: UIViewRepresentable {
 
     func updateUIView(_ webView: WKWebView, context: Context) {}
 
+    static func dismantleUIView(_ webView: WKWebView, coordinator: ()) {
+        webView.stopLoading()
+        webView.loadHTMLString("", baseURL: nil)
+    }
+
     private static let document = #"""
     <!DOCTYPE html>
     <html>
@@ -63,6 +68,10 @@ struct NeoSpringView: UIViewRepresentable {
 
 /// Full-screen host for the payload, shown while the interface reloads.
 struct NeoSpringOverlay: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var canClose = false
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
@@ -70,6 +79,28 @@ struct NeoSpringOverlay: View {
             ProgressView()
                 .progressViewStyle(.circular)
                 .tint(.white)
+            if canClose {
+                VStack {
+                    HStack {
+                        Spacer()
+                        Button(L("COMMON_CLOSE")) { dismiss() }
+                            .buttonStyle(.borderedProminent)
+                            .tint(.white.opacity(0.25))
+                            .foregroundStyle(.white)
+                            .padding(20)
+                    }
+                    Spacer()
+                }
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background { dismiss() }
+        }
+        .task {
+            do {
+                try await Task.sleep(for: .seconds(5))
+                canClose = true
+            } catch {}
         }
     }
 }

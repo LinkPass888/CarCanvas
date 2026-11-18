@@ -1,6 +1,6 @@
 # 更新日志
 
-**English** · [简体中文](CHANGELOG.zh.md) · [日本語](CHANGELOG.ja.md)
+[English](CHANGELOG.md) · **简体中文** · [日本語](CHANGELOG.ja.md)
 
 ## 2.1.0 — build 5
 
