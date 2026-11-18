@@ -2,6 +2,17 @@
 
 **English** · [简体中文](CHANGELOG.zh.md) · [日本語](CHANGELOG.ja.md)
 
+## 2.1.1 — build 6
+
+### Added
+- **Remembered crop resolution.** Confirming a custom pixel size or aspect-ratio preset saves that resolution for subsequent crops across launches. Confirming **System size** clears the saved resolution and restores per-file defaults.
+
+### Fixed
+- **Crop frame, presets and CJK input.** Narrow portrait ratios no longer overflow the preview area, switching between aspect-ratio presets no longer shrinks the resolution, and full-width digits or pasted spaces are accepted.
+- **Panoramic photo support.** Source images wider or taller than 16,384 pixels are downsampled cleanly instead of failing on confirmation.
+- **Reload overlay recovery.** The interface-reload overlay stops when backgrounded so returning from the lock screen does not re-trigger it, and exposes a **Close** button after 5 seconds if the reload does not occur.
+- **Accurate staged metadata and version display.** Pending edits show their staged byte size, photo preparation displays a loading state, and Settings reads the live app version instead of a stale label.
+
 ## 2.1.0 — build 5
 
 ### Added
