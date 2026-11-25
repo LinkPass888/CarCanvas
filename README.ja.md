@@ -17,6 +17,18 @@
 - iOS **26.0–26.7.2** または **27.0–27.2.1**。
 - 未署名 IPA は App Group を保持するツール（SideStore、AltStore、Impactor など）で署名してください。
 
+## インストール
+
+署名されていない IPA は、ご自身の Apple ID で署名する必要があります。ソースを使うのが一番簡単で、一度入れればその後も同じ場所から更新できます：
+
+```
+https://linkpass888.github.io/Sideload/source.json
+```
+
+[AltStore](https://altstore.io/)、SideStore、Feather のいずれかにこのソースを追加すると、そこからインストールと更新ができます。[サイドロード用ページ](https://linkpass888.github.io/Sideload/) を開いてボタンを押しても追加できます。ソースには Kazumi と AirBeep も含まれます。
+
+または [Releases](https://github.com/LinkPass888/CarCanvas/releases/latest) から `CarCanvas-v*-unsigned.ipa` をダウンロードし、App Group を保持できるツールで署名してインストールしてください。
+
 ## 5 ステップで使う
 
 1. CarPlay の **設定 → 壁紙** で模様付き壁紙を選び、キャッシュを生成します。**キャッシュは最大 6 枚までです。**
