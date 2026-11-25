@@ -9,6 +9,10 @@
 - **优化裁切拖动跟手度。** 裁切蒙版静态缓存免重绘，并将拖动手势起始阈值降至 1pt，消除起手顿挫感。
 - **发版安装包附带版本号。** 构建并发布的未签名安装包文件名改为 `CarCanvas-v<版本号>-unsigned.ipa`（如 `CarCanvas-v2.1.2-unsigned.ipa`）。
 
+
+
+**安装：** 在 AltStore / SideStore / Feather 中添加软件源 `https://linkpass888.github.io/Sideload/source.json`，即可直接安装与更新，无需手动下载 IPA。入口页 <https://linkpass888.github.io/Sideload/>
+
 ## 2.1.1 — build 6
 
 ### 新增
