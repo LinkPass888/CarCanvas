@@ -101,3 +101,14 @@ jobs:
             artifacts/build-report.txt \
             --title "CarCanvas ${GITHUB_REF_NAME}" \
             --notes-file artifacts/release-notes.md
+
+      - name: Notify sideload source
+        # Best effort: a missing or expired token must never fail a release
+        # that has already been published.
+        if: success()
+        continue-on-error: true
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.SIDELOAD_TOKEN }}
+          repository: LinkPass888/Sideload
+          event-type: upstream-release
