@@ -17,6 +17,18 @@
 - iOS **26.0–26.7.2** 或 **27.0–27.2.1**。
 - 未签名 IPA 需用支持 App Group 的工具签名，例如 SideStore、AltStore 或 Impactor。
 
+## 安装
+
+未签名 IPA 需要自备 Apple ID 签名。用软件源最省事，装一次之后随版本更新：
+
+```
+https://linkpass888.github.io/Sideload/source.json
+```
+
+在 [AltStore](https://altstore.io/)、SideStore 或 Feather 里添加这个源，之后直接在源里安装与更新。也可以打开 [侧载入口页](https://linkpass888.github.io/Sideload/) 点按钮自动加源。源里还有 Kazumi 与 AirBeep。
+
+也可以从 [Releases](https://github.com/LinkPass888/CarCanvas/releases/latest) 手动下载 `CarCanvas-v*-unsigned.ipa`，用支持 App Group 的工具签名安装。
+
 ## 五步上手
 
 1. 在 CarPlay **设置 → 壁纸**中选择图案壁纸生成缓存。**系统最多只缓存 6 个壁纸。**
