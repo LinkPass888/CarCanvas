@@ -17,6 +17,18 @@ Replace CarPlay wallpapers with your own photos, with original-cache backup and 
 - iOS **26.0–26.7.2** or **27.0–27.2.1**.
 - Sign the unsigned IPA with a tool that preserves App Groups, such as SideStore, AltStore or Impactor.
 
+## Install
+
+The unsigned IPA needs to be signed with your own Apple ID. A source is the easiest route — install once, then update from the same place:
+
+```
+https://linkpass888.github.io/Sideload/source.json
+```
+
+Add that source in [AltStore](https://altstore.io/), SideStore or Feather, then install and update CarCanvas from it. You can also open the [sideload page](https://linkpass888.github.io/Sideload/) and tap the button to add the source automatically. The source also carries Kazumi and AirBeep.
+
+Alternatively, download `CarCanvas-v*-unsigned.ipa` from [Releases](https://github.com/LinkPass888/CarCanvas/releases/latest) and sign it with a tool that preserves App Groups.
+
 ## Quick start
 
 1. In CarPlay **Settings → Wallpaper**, pick a patterned wallpaper to generate the cache. **The system caches at most six wallpapers.**
