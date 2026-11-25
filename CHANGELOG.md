@@ -9,6 +9,10 @@
 - **Smoother crop dragging.** Cached the static crop overlay during gestures and lowered the drag activation threshold to 1pt to eliminate initial stutter.
 - **Versioned release IPA filename.** Packaged unsigned IPA artifacts now include the version string (`CarCanvas-v<version>-unsigned.ipa`, e.g. `CarCanvas-v2.1.2-unsigned.ipa`).
 
+
+
+**Install:** add the source `https://linkpass888.github.io/Sideload/source.json` in AltStore / SideStore / Feather to install and update directly, no manual IPA download needed. Landing page <https://linkpass888.github.io/Sideload/>
+
 ## 2.1.1 — build 6
 
 ### Added
