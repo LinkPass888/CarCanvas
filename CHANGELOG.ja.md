@@ -9,6 +9,10 @@
 - **ドラッグ操作の滑らかさを改善。** トリミングオーバーレイの再描画を抑え、ドラッグ開始のしきい値を 1pt に下げることで動かし始めの引っかかりを解消しました。
 - **リリース IPA ファイル名にバージョンを付与。** 未署名 IPA のファイル名を `CarCanvas-v<バージョン>-unsigned.ipa`（例：`CarCanvas-v2.1.2-unsigned.ipa`）に変更しました。
 
+
+
+**インストール：** AltStore / SideStore / Feather にソース `https://linkpass888.github.io/Sideload/source.json` を追加すると、IPA を手動でダウンロードせずにインストールと更新ができます。入口ページ <https://linkpass888.github.io/Sideload/>
+
 ## 2.1.1 — build 6
 
 ### 追加
